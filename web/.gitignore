@@ -1,0 +1,59 @@
+# ==========================================
+# TUW-BT Root .gitignore
+# ==========================================
+
+# Data Directory
+data/**/*
+!data/**/.gitkeep
+
+# Python / FastAPI Backend
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Machine Learning Models
+# *.pkl
+
+# Angular & Node
+dist/
+tmp/
+out-tsc/
+bazel-out/
+node_modules/
+npm-debug.log
+yarn-error.log
+.angular/cache/
+.sass-cache/
+connect.lock
+coverage/
+libpeerconnection.log
+testem.log
+typings/
+
+# IDEs and Editors
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history/*
+
+# System Files
+.DS_Store
+Thumbs.db
