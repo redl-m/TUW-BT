@@ -1,12 +1,15 @@
 import os
-import sys
 import json
-import pickle
+import joblib
 import numpy as np
+import sys
 import shap
+
+import shap.explainers._explainer
+shap.explainers._explainer.is_transformers_lm = lambda *args, **kwargs: False # Force SHAP to skip the Hugging Face LM check
+
 from typing import Dict, List, Any
 from app.models.candidate import CandidateFeatures
-
 
 # Custom Tokenizer from Jupyter notebook
 def split_comma_skills(skill_string):
@@ -26,22 +29,27 @@ class ScorerService:
     ):
         print("Initializing Scorer Service and SHAP TreeExplainer...")
 
-        # Load the Random Forest model
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"RF Model not found at {model_path}")
-        with open(model_path, "rb") as f:
-            self.model = pickle.load(f)
 
-        # Load the feature column names the model was trained on
+        with open(model_path, "rb") as f:
+            loaded_obj = joblib.load(f)
+
+        # Pipeline Extraction Logic
+        if hasattr(loaded_obj, "steps"):
+            print("Scikit-Learn Pipeline detected. Extracting the Random Forest step...")
+            self.model = loaded_obj.steps[-1][1]
+        else:
+            self.model = loaded_obj
+
         if not os.path.exists(features_path):
             raise FileNotFoundError(f"Feature names not found at {features_path}")
-        with open(features_path, "r") as f:
-            self.feature_columns: List[str] = json.load(f)
 
-        # Initialize TreeSHAP
+        with open(features_path, "r") as f:
+            self.feature_columns = json.load(f)
+
         self.explainer = shap.TreeExplainer(self.model)
 
-        # Risk flag boundary
         self.RISK_BOUNDARY_THRESHOLD = 0.20
 
     def _prepare_feature_array(self, features: CandidateFeatures) -> np.ndarray:
