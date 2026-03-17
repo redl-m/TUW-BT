@@ -1,10 +1,21 @@
 import os
+import sys
 import json
 import pickle
 import numpy as np
 import shap
 from typing import Dict, List, Any
 from app.models.candidate import CandidateFeatures
+
+
+# Custom Tokenizer from Jupyter notebook
+def split_comma_skills(skill_string):
+    if not isinstance(skill_string, str):
+        return []
+    return [skill.strip() for skill in skill_string.split(',')]
+
+
+sys.modules['__main__'].split_comma_skills = split_comma_skills
 
 
 class ScorerService:
@@ -117,7 +128,7 @@ class ScorerService:
         X_matrix = self._prepare_feature_array(features)
 
         # Baseline model score
-        rf_score = float(self.model.predict_proba(X_matrix)[0][1]) # want class 1 from return
+        rf_score = float(self.model.predict_proba(X_matrix)[0][1])  # want class 1 from return
 
         # Exact SHAP Attributions via TreeExplainer
         shap_matrix = self.explainer.shap_values(X_matrix)
@@ -133,7 +144,7 @@ class ScorerService:
         shap_dict = {
             self.feature_columns[i]: float(candidate_shap_vals[i])
             for i in range(len(self.feature_columns))
-            if candidate_shap_vals[i] != 0.0 # filter out 0s
+            if candidate_shap_vals[i] != 0.0  # filter out 0s
         }
 
         # Weighted User Score
