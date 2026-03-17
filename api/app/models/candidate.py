@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional, Dict
 
 
 class CandidateFeatures(BaseModel):
@@ -23,3 +23,18 @@ class CandidateFeatures(BaseModel):
 
     class Config:
         populate_by_name = True
+
+
+class Candidate(BaseModel):
+    id: str
+    features: CandidateFeatures
+
+    # Scoring Metrics
+    rf_score: Optional[float] = None
+    user_score: Optional[float] = None
+    risk_flag: bool = False
+    shap_values: Optional[Dict[str, float]] = None
+
+    # XAI Generative Outputs
+    executive_summary: str = Field(default="")
+    interview_questions: List[str] = Field(default_factory=list)
