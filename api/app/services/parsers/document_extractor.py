@@ -1,18 +1,23 @@
-import fitz
+import fitz  # PyMuPDF
 import docx
 import io
-from fastapi import UploadFile
+import os
 
 
 class DocumentExtractor:
     @staticmethod
-    async def extract_text(file: UploadFile) -> str:
+    async def extract_text_from_path(file_path: str) -> str:
         """
-        Reads an UploadFile and extracts text based on its extension.
-        Supports .pdf, .docx, and .txt.
+        Reads a file from the local disk and extracts text based on its extension.
         """
-        filename = file.filename.lower()
-        content = await file.read()
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        filename = file_path.lower()
+
+        # Read the file bytes from disk
+        with open(file_path, "rb") as f:
+            content = f.read()
 
         if filename.endswith(".pdf"):
             return DocumentExtractor._extract_from_pdf(content)
@@ -21,7 +26,7 @@ class DocumentExtractor:
         elif filename.endswith(".txt"):
             return content.decode("utf-8", errors="ignore")
         else:
-            raise ValueError(f"Unsupported file format: {filename}. Please use PDF, DOCX, or TXT.")
+            raise ValueError(f"Unsupported file format: {filename}")
 
     @staticmethod
     def _extract_from_pdf(content: bytes) -> str:
