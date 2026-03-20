@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {Component, EventEmitter, Input, Output} from '@angular/core';
+import {CommonModule} from '@angular/common';
 
 @Component({
   selector: 'app-visual-slider',
@@ -72,8 +72,7 @@ export class VisualSliderComponent {
     // Safety guard to completely block emissions if the slider is locked
     if (this.disabled) return;
 
-    const val = parseInt((event.target as HTMLInputElement).value, 10);
-    this.value = val;
+    this.value = parseInt((event.target as HTMLInputElement).value, 10);
     this.valueChange.emit(this.value);
   }
 }
