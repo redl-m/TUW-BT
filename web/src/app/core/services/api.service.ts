@@ -1,11 +1,11 @@
-import { Injectable, inject, NgZone } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import {Injectable, inject, NgZone} from '@angular/core';
+import {HttpClient} from '@angular/common/http';
+import {Observable} from 'rxjs';
 
 /**
  * Service for interacting with the backend API.
  */
-@Injectable({ providedIn: 'root' })
+@Injectable({providedIn: 'root'})
 export class ApiService {
   private http = inject(HttpClient);
   private zone = inject(NgZone);
@@ -51,6 +51,14 @@ export class ApiService {
   }
 
   /**
+   * Get the current weights for each feature.
+   * @returns An observable that emits the current weights.
+   */
+  updateWeights(weights: any): Observable<any> {
+    return this.http.post('/api/weights', {weights});
+  }
+
+  /**
    * Connect to the WebSocket for candidate updates.
    * @param onUpdate A callback function to handle incoming updates.
    * @private
@@ -61,9 +69,8 @@ export class ApiService {
     this.ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
-      // wrap update to ensure updates are handled immediately
       this.zone.run(() => {
-        onUpdate(data.candidates);
+        onUpdate(data); // Pass the entire object
       });
     };
 
@@ -74,7 +81,7 @@ export class ApiService {
 
     this.ws.onerror = (error) => {
       console.error('WebSocket Error:', error);
-      this.ws?.close(); // Force the close event to trigger reconnection
+      this.ws?.close();
     };
   }
 }
