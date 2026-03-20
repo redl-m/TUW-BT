@@ -1,8 +1,9 @@
 import {Component, inject, OnInit} from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { CandidateStore } from '../../core/state/candidate.store';
-import { WeightingSidebarComponent } from './components/weighting-sidebar/weighting-sidebar.component';
-import { CandidateListComponent } from './components/candidate-list/candidate-list.component';
+import {CommonModule} from '@angular/common';
+import {CandidateStore} from '../../core/state/candidate.store';
+import {WeightingSidebarComponent} from './components/weighting-sidebar/weighting-sidebar.component';
+import {CandidateListComponent} from './components/candidate-list/candidate-list.component';
+import {ApiService} from '../../core/services/api.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -41,9 +42,14 @@ import { CandidateListComponent } from './components/candidate-list/candidate-li
  */
 export class DashboardComponent implements OnInit {
   store = inject(CandidateStore);
+  apiService = inject(ApiService);
 
+  /**
+   * Initializes the dashboard by subscribing to candidate updates.
+   */
   ngOnInit() {
-    // Open the socket when the dashboard is initialized
-    this.store.connectWebSocket();
+    this.apiService.connectToCandidateUpdates((candidates) => {
+      this.store.setCandidates(candidates);
+    });
   }
 }
