@@ -108,21 +108,40 @@ class ScorerService:
     def calculate_user_score(self, features: CandidateFeatures, user_weights: Dict[str, float]) -> float:
         """
         Calculates the subjective recruiter score dynamically based on active slider weights.
+        Normalizes all raw features to a 0.0 - 1.0 scale so the final score is a true percentage.
         """
+        # TODO: does this correctly calculate the score based off the RF score?
         numerator = 0.0
         denominator = 0.0
 
-        # Flat dictionary of the candidate's raw attributes to match against slider labels
         raw_dict = features.model_dump(by_alias=True)
 
+        # Define the "Maximum" expected values to calculate percentages
+        MAX_VALUES = {
+            "Experience (Years)": 10.0,  # 10 years = 100%
+            "Projects Count": 10.0,  # 10 projects = 100%
+            "Structural Adherence": 5.0,
+            "Adaptive Fluidity": 5.0,
+            "Interpersonal Influence": 5.0,
+            "Execution Velocity": 5.0,
+            "Psychological Resilience": 5.0
+        }
+
+        print("scorer.py/calculate_user_score: Features: " + str(features))
+        print("scorer.py/calculate_user_score: User Weights: " + str(user_weights))
+
         for feature_name, weight in user_weights.items():
-            # If the UI weight maps directly to a soft skill or numerical value
             if feature_name in raw_dict and isinstance(raw_dict[feature_name], (int, float)):
-                feature_value = raw_dict[feature_name]
+                raw_value = float(raw_dict[feature_name])
 
-                # TODO: potentially normalize feature_values to [0, 1] to align with RF score if not done elsewhere
+                # Get the max value for this feature
+                max_val = MAX_VALUES.get(feature_name, 3.0)
 
-                numerator += (feature_value * weight)
+                # Normalize the value between 0.0 and 1.0 and cap it at 1.0
+                normalized_value = min(raw_value / max_val, 1.0)
+
+                # Calculate weighted score using the normalized value
+                numerator += (normalized_value * weight)
                 denominator += weight
 
         return (numerator / denominator) if denominator > 0 else 0.0
@@ -135,27 +154,26 @@ class ScorerService:
         # Prepare strict array
         X_matrix = self._prepare_feature_array(features)
 
-        # Baseline model score
-        rf_score = float(self.model.predict_proba(X_matrix)[0][1])  # want class 1 from return
+        # Normalize RF score in [0, 1]
+        raw_rf_score = float(self.model.predict(X_matrix)[0])
+        rf_score = (raw_rf_score / 100.0) if raw_rf_score > 1.0 else raw_rf_score
 
         # Exact SHAP Attributions via TreeExplainer
-        shap_matrix = self.explainer.shap_values(X_matrix)
+        shap_results = self.explainer.shap_values(X_matrix)
 
-        # Handle different SHAP return formats
-        if isinstance(shap_matrix, list):
-            candidate_shap_vals = shap_matrix[1][0]
+        if isinstance(shap_results, list):
+            candidate_shap_vals = shap_results[1][0]
         else:
-            # In case it's a binary classifier
-            candidate_shap_vals = shap_matrix[0] if len(shap_matrix.shape) == 2 else shap_matrix[..., 1][0]
+            candidate_shap_vals = shap_results[0] if len(shap_results.shape) > 1 else shap_results
 
-        # Zip the SHAP values with the feature names so the LLM can understand them
+        # Zip the SHAP values with the feature names
         shap_dict = {
             self.feature_columns[i]: float(candidate_shap_vals[i])
             for i in range(len(self.feature_columns))
-            if candidate_shap_vals[i] != 0.0  # filter out 0s
+            if candidate_shap_vals[i] != 0.0
         }
 
-        # Weighted User Score
+        # Normalized user score using the function above
         user_score = self.calculate_user_score(features, user_weights)
 
         # Risk Flag Logic
