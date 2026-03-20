@@ -1,0 +1,147 @@
+.upload-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+  padding: 2rem;
+}
+
+.header-text {
+  text-align: center;
+  margin-bottom: 3rem;
+
+  h1 {
+    color: white;
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    color: var(--modal-bg);
+    font-size: 1.125rem;
+  }
+}
+
+.dropzone-container {
+  display: flex;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 900px;
+
+  @media (max-width: 970px) {
+    flex-direction: column;
+  }
+}
+
+.dropzone.card {
+  flex: 1;
+  background: white;
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  transition: transform 0.2s ease;
+
+  &:hover {
+    transform: translateY(-4px);
+  }
+
+  h3 {
+    color: var(--text-color);
+    font-weight: 600;
+    font-size: 1.25rem;
+    margin: 1rem 0 0.5rem;
+  }
+
+  p {
+    color: #666;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+  }
+
+  .file-types {
+    color: #999;
+    font-size: 0.75rem;
+  }
+
+  .icon-wrapper {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+
+    &.blue { background: #eef2ff; color: #4f46e5; }
+    &.purple { background: #f3e8ff; color: var(--accent-color); }
+  }
+}
+
+.primary-btn {
+  margin-top: 3rem;
+  background: white;
+  color: var(--accent-color);
+  border: none;
+  padding: 1rem 2.5rem;
+  border-radius: 50px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  transition: background 0.2s;
+
+  &:hover {
+    background: var(--bg-color);
+  }
+}
+
+.dropzone.card {
+  border: 2px dashed transparent;
+
+  &.drag-active {
+    border-color: var(--accent-color);
+    background-color: #fcfaff;
+    transform: scale(1.02);
+  }
+}
+
+.success-text {
+  color: #10b981 !important;
+}
+
+.clear-btn {
+  margin-top: 0.5rem;
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.primary-btn {
+  &.disabled-btn {
+    background: var(--btn-disabled-bg);
+    color: white;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.7;
+
+    &:hover {
+      background: var(--btn-disabled-bg);
+    }
+  }
+}
