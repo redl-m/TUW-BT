@@ -4,9 +4,7 @@ import re
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from app.models.candidate import CandidateFeatures
 
-
 class CVParserService:
-    # Point to downloaded folder
     def __init__(self,
                  model_id: str = r"D:\huggingface\hub\models--meta-llama--Meta-Llama-3.1-8B-Instruct\snapshots\0e9e39f249a16976918f6564b8830bc894c89659"):
         print("Initializing Llama-3.1-8B via Hugging Face...")
@@ -17,12 +15,7 @@ class CVParserService:
             bnb_4bit_use_double_quant=True,
         )
 
-        # Force Offline Mode
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            model_id,
-            local_files_only=True
-        )
-
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_id,
             device_map="auto",
@@ -37,11 +30,13 @@ class CVParserService:
         ]
 
     def _build_prompt(self, cv_text: str) -> list:
-        """Constructs the prompt using Llama 3's native chat template."""
-
         json_schema = {
             "type": "object",
             "properties": {
+                "Name": {
+                    "type": "string",
+                    "description": "The candidate's full name. If not found, output 'Unknown Candidate'"
+                },
                 "Technical Skills": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -93,7 +88,7 @@ class CVParserService:
                 }
             },
             "required": [
-                "Technical Skills", "Experience (Years)", "Education", "Certifications",
+                "Name", "Technical Skills", "Experience (Years)", "Education", "Certifications", # <-- Added Name here
                 "Job Role", "Projects Count", "Job Hopping", "Structural Adherence",
                 "Adaptive Fluidity", "Interpersonal Influence", "Execution Velocity",
                 "Psychological Resilience"
@@ -116,20 +111,16 @@ class CVParserService:
             {"role": "user", "content": f"Extract the data from this resume:\n\n{cv_text}"}
         ]
 
-    def parse_cv(self, cv_text: str) -> CandidateFeatures:
-        """Runs the deterministic extraction and validates via Pydantic."""
-
+    def parse_cv(self, cv_text: str) -> tuple[str, CandidateFeatures]:
         messages = self._build_prompt(cv_text)
 
-        # Capture full encoding (includes input_ids and attention_mask)
         inputs = self.tokenizer.apply_chat_template(
             messages,
             add_generation_prompt=True,
             return_tensors="pt",
-            return_dict=True # Ensures a clean dictionary is returned
+            return_dict=True
         ).to(self.model.device)
 
-        # This gives the model both the IDs and the attention mask
         outputs = self.model.generate(
             **inputs,
             max_new_tokens=1024,
@@ -139,16 +130,14 @@ class CVParserService:
             top_p=None
         )
 
-        # Decode only the new tokens
-        input_length = inputs['input_ids'].shape[-1] # inputs['input_ids'] to get the length for slicing
+        input_length = inputs['input_ids'].shape[-1]
         response_text = self.tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
 
         return self._clean_and_validate(response_text)
 
-    def _clean_and_validate(self, response_text: str) -> CandidateFeatures:
-        """Cleans potential markdown from the LLM and enforces the Pydantic contract."""
+    # Extracts the name before passing the rest to Pydantic
+    def _clean_and_validate(self, response_text: str) -> tuple[str, CandidateFeatures]:
         try:
-            # Regex JSON Extraction
             match = re.search(r'\{.*\}', response_text, re.DOTALL)
 
             if not match:
@@ -157,9 +146,12 @@ class CVParserService:
             json_str = match.group(0)
             parsed_dict = json.loads(json_str)
 
-            # Let Pydantic handle the mapping via the aliases set in candidate.py
-            return CandidateFeatures(**parsed_dict)
+            # Pop the name out of the dictionary so it doesn't break CandidateFeatures validation
+            extracted_name = parsed_dict.pop("Name", "Unknown Candidate")
+
+            # Let Pydantic handle the rest of the mapping
+            return extracted_name, CandidateFeatures(**parsed_dict)
 
         except (json.JSONDecodeError, ValueError) as e:
             print(f"❌ CV Extraction failed or violated schema: {e}\nRaw Output: {response_text}")
-            return CandidateFeatures()  # fallback to default zeros
+            return "Unknown Candidate", CandidateFeatures()

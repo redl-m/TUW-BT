@@ -38,6 +38,7 @@
 }
 
 .sliders-container {
+  transition: opacity 0.5s ease;
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
@@ -53,5 +54,29 @@
     font-size: 0.85rem;
     color: #7b849b;
     line-height: 1.6;
+  }
+}
+
+/* Locked state */
+.disabled-sliders {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.loading-text {
+  font-size: 0.85rem;
+  color: #2e1065;
+  font-weight: 600;
+  text-align: center;
+  margin: 1.5rem 0 0.5rem 0;
+  animation: gentlePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes gentlePulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
   }
 }

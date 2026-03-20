@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import {Component, inject, Input} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CandidateStore } from '../../../../core/state/candidate.store';
 import { VisualSliderComponent } from '../../../../shared/ui/visual-slider/visual-slider.component';
@@ -23,15 +23,19 @@ import { VisualSliderComponent } from '../../../../shared/ui/visual-slider/visua
         </div>
       </div>
 
-      <div class="sliders-container">
+      <div class="sliders-container" [class.disabled-sliders]="disabled">
         <app-visual-slider
           *ngFor="let key of weightKeys"
           [label]="key"
           [description]="getFeatureDescription(key)"
           [value]="store.jobWeights()[key]"
           [impactPercentage]="getImpactPercentage(key)"
-          (valueChange)="onSliderChange(key, $event)">
+          [disabled]="disabled"  (valueChange)="onSliderChange(key, $event)">
         </app-visual-slider>
+      </div>
+
+      <div *ngIf="disabled" class="loading-text">
+        LLM is extracting baseline weights...
       </div>
 
       <div class="sidebar-footer">
@@ -46,6 +50,8 @@ import { VisualSliderComponent } from '../../../../shared/ui/visual-slider/visua
  * Component for displaying the weighting sidebar.
  */
 export class WeightingSidebarComponent {
+
+  @Input() disabled: boolean = false;
   store = inject(CandidateStore);
 
   get weightKeys(): string[] {
@@ -63,14 +69,15 @@ export class WeightingSidebarComponent {
   // Helper map to provide the subtitles
   getFeatureDescription(key: string): string {
     const descriptions: Record<string, string> = {
-      'Experience': 'Years of relevant industry experience',
-      'Education': 'Academic background and qualifications',
-      'Skill Overlap': 'Match with required technical skills',
-      'Leadership': 'Team management and leadership abilities',
-      'Company Background': 'Previous employers and prestige',
-      'Retention/Stability': 'Job tenure and commitment history',
-      'Cultural Fit': 'Alignment with company values'
+      'Experience (Years)': 'Total years of professional experience',
+      'Projects Count': 'Number of distinct projects completed',
+      'Structural Adherence': 'Resume structure and professional formatting',
+      'Adaptive Fluidity': 'Ability to learn new technologies quickly',
+      'Interpersonal Influence': 'Leadership, mentoring, and teamwork skills',
+      'Execution Velocity': 'Speed of delivery and meeting deadlines',
+      'Psychological Resilience': 'Overcoming challenges and long-term dedication'
     };
+
     return descriptions[key] || 'Dynamic feature extracted by LLM';
   }
 

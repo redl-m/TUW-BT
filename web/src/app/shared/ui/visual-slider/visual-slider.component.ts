@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {Component, EventEmitter, Input, Output} from '@angular/core';
+import {CommonModule} from '@angular/common';
 
 @Component({
   selector: 'app-visual-slider',
@@ -7,7 +7,7 @@ import { CommonModule } from '@angular/common';
   imports: [CommonModule],
   styleUrls: ['./visual-slider.component.scss'],
   template: `
-    <div class="slider-wrapper">
+    <div class="slider-wrapper" [class.is-disabled]="disabled">
 
       <div class="slider-header">
         <span class="label">{{ label }}</span>
@@ -26,6 +26,7 @@ import { CommonModule } from '@angular/common';
           max="5"
           step="1"
           [value]="value"
+          [disabled]="disabled"
           (input)="onInput($event)"
           class="native-slider"
         >
@@ -45,11 +46,6 @@ import { CommonModule } from '@angular/common';
 
 /**
  * Component for displaying a visual slider with a label, description, and impact percentage.
- * @param label The label for the slider.
- * @param description The description for the slider.
- * @param value The current value of the slider.
- * @param impactPercentage The impact percentage of the slider.
- * @param id The unique identifier for the slider.
  */
 export class VisualSliderComponent {
   @Input({ required: true }) label!: string;
@@ -58,6 +54,9 @@ export class VisualSliderComponent {
   @Input() impactPercentage: number = 0;
   @Input() id: string = Math.random().toString(36).substring(2, 9);
 
+  // The disabled input flag to receive the lock state from the sidebar
+  @Input() disabled: boolean = false;
+
   @Output() valueChange = new EventEmitter<number>();
 
   // Maps the 1-5 scale to a 0-100% position
@@ -65,9 +64,15 @@ export class VisualSliderComponent {
     return ((this.value - 1) / 4) * 100;
   }
 
+  /**
+   * Handles the input event from the slider.
+   * @param event The input event object.
+   */
   onInput(event: Event) {
-    const val = parseInt((event.target as HTMLInputElement).value, 10);
-    this.value = val;
+    // Safety guard to completely block emissions if the slider is locked
+    if (this.disabled) return;
+
+    this.value = parseInt((event.target as HTMLInputElement).value, 10);
     this.valueChange.emit(this.value);
   }
 }

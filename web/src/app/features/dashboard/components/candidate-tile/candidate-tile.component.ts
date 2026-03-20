@@ -17,15 +17,18 @@ import { Candidate } from '../../../../core/models/candidate.model';
           <div class="avatar">{{ initials }}</div>
           <div class="info flex flex-col justify-center">
             <span class="rank-badge mb-1">#{{ rank }}</span>
-            <h3 class="name text-lg font-semibold text-gray-900" [title]="candidate.features['Job Role'] || 'Candidate'">
-              {{ candidate.features['Job Role'] || 'Candidate' }}
+
+            <h3 class="name text-lg font-semibold text-gray-900" [title]="formattedName">
+              {{ formattedName }}
             </h3>
+
+            <span class="text-xs text-gray-500">{{ candidate.features['Job Role'] || 'No job role found' }}</span>
           </div>
         </div>
 
         <div class="scores-section flex-grow max-w-xl flex flex-col gap-4">
           <div class="score-row flex items-center gap-4">
-            <span class="score-label w-24 text-sm font-medium text-gray-600">Your Score</span>
+            <span class="score-label w-24 text-sm font-medium text-gray-600">User Score</span>
             <div class="progress-track flex-grow bg-gray-100 rounded-full h-3 overflow-hidden">
               <div class="progress-fill user-score h-full rounded-full transition-all duration-700"
                    [style.width.%]="(candidate.user_score || 0) * 100"></div>
@@ -34,7 +37,7 @@ import { Candidate } from '../../../../core/models/candidate.model';
           </div>
 
           <div class="score-row flex items-center gap-4">
-            <span class="score-label w-24 text-sm font-medium text-gray-600">AI Score (RF)</span>
+            <span class="score-label w-24 text-sm font-medium text-gray-600">Baseline Score</span>
             <div class="progress-track flex-grow bg-gray-100 rounded-full h-3 overflow-hidden">
               <div class="progress-fill ai-score h-full rounded-full transition-all duration-700"
                    [style.width.%]="(candidate.rf_score || 0) * 100"></div>
@@ -54,6 +57,7 @@ import { Candidate } from '../../../../core/models/candidate.model';
 
           <button
             class="view-btn bg-[#2e1065] text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-[#1e1b4b] transition-colors flex items-center gap-2 whitespace-nowrap"
+            style="font-family: inherit;"
             (click)="toggleExpand()">
             {{ isExpanded ? 'Hide Details' : 'View Details' }}
             <span class="text-xs transition-transform duration-200" [ngClass]="{'rotate-180': isExpanded}">▼</span>
@@ -80,9 +84,34 @@ export class CandidateTileComponent {
 
   isExpanded: boolean = false;
 
+  /**
+   * Format the candidate's name to capitalize the first letter of each word.
+   */
+  get formattedName(): string {
+    if (!this.candidate?.name) return 'Unknown Candidate';
+    return this.candidate.name
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  /**
+   * Extract the first and last letters of the candidate's name.
+   */
   get initials(): string {
-    const title = this.candidate.features['Job Role'] || 'C';
-    return title.substring(0, 2).toUpperCase();
+    const name = this.formattedName.trim();
+    if (!name || name === 'Unknown Candidate') return '?';
+
+    // Split the name by spaces and filter out any accidental empty strings
+    const parts = name.split(' ').filter(part => part.length > 0);
+
+    if (parts.length >= 2) {
+      // First letter of the first word + First letter of the last word
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    // Fallback if they only have one name
+    return parts[0][0].toUpperCase();
   }
 
   toggleExpand(): void {
