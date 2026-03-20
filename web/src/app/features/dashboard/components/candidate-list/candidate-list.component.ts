@@ -11,18 +11,16 @@ import { SkeletonLoaderComponent } from '../../../../shared/ui/skeleton-loader/s
   template: `
     <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
 
-      <ng-container *ngIf="!isProcessing">
-        <div *ngIf="candidates.length === 0" class="col-span-full text-center text-gray-500 py-20 bg-white border-2 border-dashed border-gray-200 rounded-xl">
-          Waiting for candidates to be uploaded...
-        </div>
+      <div *ngIf="candidates.length === 0" class="col-span-full text-center text-gray-500 py-20 bg-white border-2 border-dashed border-gray-200 rounded-xl">
+        Waiting for candidates to be uploaded...
+      </div>
 
-        <ng-container *ngFor="let candidate of candidates; trackBy: trackById">
+      <ng-container *ngFor="let candidate of candidates; trackBy: trackById">
 
-          <app-skeleton-loader *ngIf="!candidate.rf_score || candidate.rf_score === 0"></app-skeleton-loader>
+        <app-skeleton-loader *ngIf="!candidate.rf_score || candidate.rf_score === 0"></app-skeleton-loader>
 
-          <app-candidate-tile *ngIf="candidate.rf_score && candidate.rf_score > 0" [candidate]="candidate"></app-candidate-tile>
+        <app-candidate-tile *ngIf="candidate.rf_score && candidate.rf_score > 0" [candidate]="candidate"></app-candidate-tile>
 
-        </ng-container>
       </ng-container>
 
     </div>
