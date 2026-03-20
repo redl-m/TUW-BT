@@ -120,14 +120,12 @@ export class UploadComponent {
       this.apiService.uploadJob(this.jobFile).subscribe();
     } else {
       this.cvFiles = [...this.cvFiles, ...Array.from(files)];
+      this.apiService.uploadCvs(this.cvFiles).subscribe();
+    }
 
-      // Wait for the backend to confirm the upload before navigating
-      this.apiService.uploadCvs(this.cvFiles).subscribe({
-        next: () => {
-          this.router.navigate(['/dashboard']); // Confirmation of the creation of empty skeletons
-        },
-        error: (err) => console.error('Upload failed:', err)
-      });
+    // Check if both job and CV files are uploaded
+    if (this.jobFile && this.cvFiles.length > 0) {
+      this.router.navigate(['/dashboard']);
     }
   }
 }
