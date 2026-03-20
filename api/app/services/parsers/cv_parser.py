@@ -1,5 +1,6 @@
 import json
 import torch
+import re
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from app.models.candidate import CandidateFeatures
 
@@ -38,23 +39,65 @@ class CVParserService:
     def _build_prompt(self, cv_text: str) -> list:
         """Constructs the prompt using Llama 3's native chat template."""
 
-        # JSON schema
         json_schema = {
             "type": "object",
             "properties": {
-                "Technical Skills": {"type": "array", "items": {"type": "string"}},
-                "Experience (Years)": {"type": "integer"},
-                "Education": {"type": "string"},
-                "Certifications": {"type": "string"},
-                "Job Role": {"type": "string"},
-                "Projects Count": {"type": "integer"},
-                "Job Hopping": {"type": "string"},
-                "Structural Adherence": {"type": "integer"},
-                "Adaptive Fluidity": {"type": "integer"},
-                "Interpersonal Influence": {"type": "integer"},
-                "Execution Velocity": {"type": "integer"},
-                "Psychological Resilience": {"type": "integer"}
-            }
+                "Technical Skills": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of specific technical skills, programming languages, and tools"
+                },
+                "Experience (Years)": {
+                    "type": "integer",
+                    "description": "Total years of professional experience"
+                },
+                "Education": {
+                    "type": "string",
+                    "description": "Highest degree (e.g., B.Sc, B.Tech, M.Tech, MBA, PhD, None)"
+                },
+                "Certifications": {
+                    "type": "string",
+                    "description": "Key certifications (e.g., AWS Certified, Google ML, None)"
+                },
+                "Job Role": {
+                    "type": "string",
+                    "description": "Current or primary job role title"
+                },
+                "Projects Count": {
+                    "type": "integer",
+                    "description": "Number of distinct projects listed"
+                },
+                "Job Hopping": {
+                    "type": "string",
+                    "description": "Assess frequency of job changes: 'Low', 'Medium', or 'High'"
+                },
+                "Structural Adherence": {
+                    "type": "integer",
+                    "description": "Rate 1-5 how well resume matches standard professional structures"
+                },
+                "Adaptive Fluidity": {
+                    "type": "integer",
+                    "description": "Rate 1-5 evidence of learning new technologies quickly"
+                },
+                "Interpersonal Influence": {
+                    "type": "integer",
+                    "description": "Rate 1-5 evidence of leadership, mentoring, or teamwork"
+                },
+                "Execution Velocity": {
+                    "type": "integer",
+                    "description": "Rate 1-5 evidence of delivering projects quickly or meeting deadlines"
+                },
+                "Psychological Resilience": {
+                    "type": "integer",
+                    "description": "Rate 1-5 evidence of overcoming challenges or long-term dedication"
+                }
+            },
+            "required": [
+                "Technical Skills", "Experience (Years)", "Education", "Certifications",
+                "Job Role", "Projects Count", "Job Hopping", "Structural Adherence",
+                "Adaptive Fluidity", "Interpersonal Influence", "Execution Velocity",
+                "Psychological Resilience"
+            ]
         }
 
         system_instruction = (
@@ -78,42 +121,45 @@ class CVParserService:
 
         messages = self._build_prompt(cv_text)
 
-        input_ids = self.tokenizer.apply_chat_template(
+        # Capture full encoding (includes input_ids and attention_mask)
+        inputs = self.tokenizer.apply_chat_template(
             messages,
             add_generation_prompt=True,
-            return_tensors="pt"
+            return_tensors="pt",
+            return_dict=True # Ensures a clean dictionary is returned
         ).to(self.model.device)
 
-        # Deterministic generation settings using temperature 0.0
+        # This gives the model both the IDs and the attention mask
         outputs = self.model.generate(
-            input_ids,
+            **inputs,
             max_new_tokens=1024,
             eos_token_id=self.terminators,
-            do_sample=False,  # Enforces greedy decoding
+            do_sample=False,
             temperature=None,
             top_p=None
         )
 
-        # Decode only the generated response
-        response_text = self.tokenizer.decode(outputs[0][input_ids.shape[-1]:], skip_special_tokens=True)
+        # Decode only the new tokens
+        input_length = inputs['input_ids'].shape[-1] # inputs['input_ids'] to get the length for slicing
+        response_text = self.tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
 
         return self._clean_and_validate(response_text)
 
     def _clean_and_validate(self, response_text: str) -> CandidateFeatures:
         """Cleans potential markdown from the LLM and enforces the Pydantic contract."""
         try:
-            # Strip standard markdown JSON blocks if the LLM accidentally includes them
-            cleaned_text = response_text.strip()
-            if cleaned_text.startswith("```json"):
-                cleaned_text = cleaned_text[7:]
-            if cleaned_text.endswith("```"):
-                cleaned_text = cleaned_text[:-3]
+            # Regex JSON Extraction
+            match = re.search(r'\{.*\}', response_text, re.DOTALL)
 
-            parsed_dict = json.loads(cleaned_text.strip())
+            if not match:
+                raise ValueError("No valid JSON structure found in the LLM response.")
+
+            json_str = match.group(0)
+            parsed_dict = json.loads(json_str)
 
             # Let Pydantic handle the mapping via the aliases set in candidate.py
             return CandidateFeatures(**parsed_dict)
 
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"Extraction failed or violated schema: {e}\nRaw Output: {response_text}")
-            return CandidateFeatures() # fallback to default
+            print(f"❌ CV Extraction failed or violated schema: {e}\nRaw Output: {response_text}")
+            return CandidateFeatures()  # fallback to default zeros
