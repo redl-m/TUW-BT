@@ -13,7 +13,7 @@ import { ApiService } from '../../core/services/api.service';
     <div class="upload-layout">
       <div class="header-text">
         <h1>AI Candidate Ranking System</h1>
-        <p>Upload your job listing and candidate CVs to begin intelligent evaluation</p>
+        <p>Drop your job listing and candidate CVs to automatically begin evaluation</p>
       </div>
 
       <div class="dropzone-container">
@@ -36,9 +36,9 @@ import { ApiService } from '../../core/services/api.service';
           </ng-container>
 
           <ng-container *ngIf="jobFile">
-            <h3 class="success-text">File Ready</h3>
+            <h3 class="success-text">Job Description Ready</h3>
             <p class="font-semibold">{{ jobFile.name }}</p>
-            <span class="file-types">{{ (jobFile.size / 1024 / 1024) | number:'1.2-2' }} MB</span>
+            <span class="file-types">Processing in background...</span>
           </ng-container>
         </div>
 
@@ -55,34 +55,20 @@ import { ApiService } from '../../core/services/api.service';
 
           <ng-container *ngIf="cvFiles.length === 0">
             <h3>Candidate CVs</h3>
-            <p>Drag & drop candidate resumes here<br>or click to browse files</p>
+            <p>Drag & drop candidate resumes here<br>to launch the dashboard</p>
             <span class="file-types">Multiple files supported</span>
           </ng-container>
 
           <ng-container *ngIf="cvFiles.length > 0">
-            <h3 class="success-text">{{ cvFiles.length }} Resumes Ready</h3>
-            <p class="font-semibold text-sm line-clamp-2">
-              <span *ngFor="let file of cvFiles; let last = last">{{ file.name }}{{ !last ? ', ' : '' }}</span>
-            </p>
-            <button class="clear-btn" (click)="clearCvs($event)">Clear All</button>
+            <h3 class="success-text">Uploading {{ cvFiles.length }} Resumes...</h3>
+            <p class="font-semibold text-sm">Redirecting to dashboard...</p>
           </ng-container>
         </div>
 
       </div>
-
-      <button class="primary-btn"
-              [disabled]="!jobFile || cvFiles.length === 0"
-              [class.disabled-btn]="!jobFile || cvFiles.length === 0"
-              (click)="startPipeline()">
-        Begin Evaluation Pipeline →
-      </button>
     </div>
   `
 })
-
-/**
- * Component for uploading job listing and candidate CVs.
- */
 export class UploadComponent {
   router = inject(Router);
   store = inject(CandidateStore);
@@ -131,33 +117,17 @@ export class UploadComponent {
   private processFiles(files: FileList, type: 'job' | 'cv') {
     if (type === 'job') {
       this.jobFile = files[0];
+      this.apiService.uploadJob(this.jobFile).subscribe();
     } else {
       this.cvFiles = [...this.cvFiles, ...Array.from(files)];
+
+      // Wait for the backend to confirm the upload before navigating
+      this.apiService.uploadCvs(this.cvFiles).subscribe({
+        next: () => {
+          this.router.navigate(['/dashboard']); // Confirmation of the creation of empty skeletons
+        },
+        error: (err) => console.error('Upload failed:', err)
+      });
     }
-  }
-
-  clearCvs(event: Event) {
-    event.stopPropagation();
-    this.cvFiles = [];
-  }
-
-  startPipeline() {
-    if (!this.jobFile || this.cvFiles.length === 0) return;
-
-    this.store.setIsProcessing(true); // Trigger loading state
-    this.router.navigate(['/dashboard']); // Jump to dashboard
-
-    // Send the files to FastAPI
-    this.apiService.processPipeline(this.jobFile, this.cvFiles).subscribe({
-      next: (response) => {
-        this.store.setCandidates(response.candidates);
-        this.store.setJobWeights(response.job_weights);
-        this.store.setIsProcessing(false);
-      },
-      error: (error) => {
-        console.error('Pipeline failed:', error);
-        this.store.setIsProcessing(false);
-      }
-    });
   }
 }
