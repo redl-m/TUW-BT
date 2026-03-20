@@ -125,13 +125,12 @@ async def upload_job(file: UploadFile = File(...)):
 
 
 @app.post("/api/upload/cvs")
-@app.post("/api/upload/cvs")
 async def upload_cvs(files: List[UploadFile] = File(...)):
     responses = []
     for file in files:
         cand_id = str(uuid.uuid4())
 
-        # --- NEW: Extract and format a readable name from the filename ---
+        # Extract and format a readable name from the filename
         original_name = file.filename
         file_extension = os.path.splitext(original_name)[1].lower()
         display_name = os.path.splitext(original_name)[0].replace("_", " ").replace("-", " ").title()
@@ -144,7 +143,7 @@ async def upload_cvs(files: List[UploadFile] = File(...)):
         # Pass the extracted name to the model
         active_candidates[cand_id] = Candidate(
             id=cand_id,
-            name=display_name,  # <--- Pass it here
+            name=display_name,
             features=CandidateFeatures(),
             rf_score=0.0,
             user_score=0.0,
@@ -168,6 +167,24 @@ async def prioritize_candidate(candidate_id: str):
     return {"status": "not_found"}
 
 
+@app.post("/api/weights")
+async def update_weights(data: dict):
+    global current_job_weights
+    if "weights" in data:
+        current_job_weights = data["weights"]
+
+        # Instantly recalculate user_score for all candidates already processed
+        for cand in active_candidates.values():
+            if cand.rf_score and cand.rf_score > 0:
+                try:
+                    scores = scorer.evaluate_candidate(cand.features, current_job_weights)
+                    cand.user_score = float(scores["user_score"])
+                except Exception as e:
+                    print(f"Failed to recalculate score: {e}")
+
+    return {"status": "success"}
+
+
 @app.websocket("/ws/candidates")
 async def candidate_updates(websocket: WebSocket):
     await websocket.accept()
@@ -175,6 +192,21 @@ async def candidate_updates(websocket: WebSocket):
         while True:
             await asyncio.sleep(1)
             updates = [c.model_dump(by_alias=True) for c in active_candidates.values()]
-            await websocket.send_json({"candidates": updates})
+
+            # Check if the Job has finished processing
+            is_job_processed = len(current_job_weights) > 0
+
+            # Send defaults if not processed yet
+            display_weights = current_job_weights if is_job_processed else {
+                "Experience (Years)": 3, "Projects Count": 3, "Structural Adherence": 3,
+                "Adaptive Fluidity": 3, "Interpersonal Influence": 3, "Execution Velocity": 3,
+                "Psychological Resilience": 3
+            }
+
+            await websocket.send_json({
+                "candidates": updates,
+                "job_weights": display_weights,
+                "is_job_processed": is_job_processed
+            })
     except Exception as e:
         print(f"WebSocket disconnected")
