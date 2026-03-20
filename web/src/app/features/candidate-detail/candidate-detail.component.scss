@@ -1,0 +1,30 @@
+.expanded-detail-container {
+  padding: 24px;
+  background-color: #f8fafc;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  border-top: 1px solid #f1f5f9;
+  box-sizing: border-box;
+}
+
+.risk-banner {
+  background-color: #fff7ed;
+  color: #c2410c;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #ffedd5;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 24px;
+  display: inline-block;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+
+  @media (min-width: 1024px) {
+    grid-template-columns: 1fr 1fr;
+  }
+}
