@@ -1,10 +1,10 @@
 import json
+import re
 from typing import Dict
 
 
 class JobParserService:
     def __init__(self, model, tokenizer):
-        # TODO: Model and tokenizer should be passed in from a central LLM manager to save VRAM
         self.model = model
         self.tokenizer = tokenizer
         self.terminators = [
@@ -13,6 +13,7 @@ class JobParserService:
         ]
 
     def _build_prompt(self, job_text: str) -> list:
+        # TODO: currently no education required
         json_schema = {
             "type": "object",
             "properties": {
@@ -47,31 +48,36 @@ class JobParserService:
     def extract_baseline_weights(self, job_text: str) -> Dict[str, float]:
         messages = self._build_prompt(job_text)
 
-        input_ids = self.tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, return_tensors="pt"
+        # Return dict
+        inputs = self.tokenizer.apply_chat_template(
+            messages, add_generation_prompt=True, return_tensors="pt", return_dict=True
         ).to(self.model.device)
 
+        # Unpack with **
         outputs = self.model.generate(
-            input_ids,
+            **inputs,
             max_new_tokens=512,
             eos_token_id=self.terminators,
             do_sample=False  # Temperature 0.0 for deterministic extraction
         )
 
-        response_text = self.tokenizer.decode(outputs[0][input_ids.shape[-1]:], skip_special_tokens=True)
+        # Decode only the new tokens
+        input_length = inputs['input_ids'].shape[-1]
+        response_text = self.tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
 
         try:
-            cleaned_text = response_text.strip()
-            if cleaned_text.startswith("```json"):
-                cleaned_text = cleaned_text[7:]
-            if cleaned_text.endswith("```"):
-                cleaned_text = cleaned_text[:-3]
+            # Regex JSON Extraction
+            match = re.search(r'\{.*\}', response_text, re.DOTALL)
 
-            weights = json.loads(cleaned_text.strip())
+            if not match:
+                raise ValueError("No valid JSON structure found in the LLM response.")
+
+            json_str = match.group(0)
+            weights = json.loads(json_str)
             return weights
 
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"Weight extraction failed: {e}")
+            print(f"Weight extraction failed: {e}\nRaw Output: {response_text}")
             # Fallback to neutral weights if parsing fails
             return {
                 "Experience (Years)": 3, "Projects Count": 3, "Structural Adherence": 3,
