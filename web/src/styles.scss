@@ -1,1 +1,19 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  --max-mobile-width: 970px;
+  --bg-color: #f4f4f9;
+  --text-color: #0b0b0b;
+  --accent-color: #2d1a61;
+  --gradient-start: #2d1a61;
+  --gradient-end: #bf30b6;
+  --btn-disabled-bg: #aaa;
+  --nav-bg: rgba(255, 255, 255, 0.6);
+  --modal-bg: #e8e6f2;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: 'Inter', system-ui, sans-serif;
+  margin: 0;
+  padding: 0;
+}
