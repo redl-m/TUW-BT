@@ -6,7 +6,7 @@ from app.models.candidate import CandidateFeatures
 
 
 class CVParserService:
-    # 1. Point to downloaded folder
+    # Point to downloaded folder
     def __init__(self,
                  model_id: str = r"D:\huggingface\hub\models--meta-llama--Meta-Llama-3.1-8B-Instruct\snapshots\0e9e39f249a16976918f6564b8830bc894c89659"):
         print("Initializing Llama-3.1-8B via Hugging Face...")
@@ -17,7 +17,7 @@ class CVParserService:
             bnb_4bit_use_double_quant=True,
         )
 
-        # 2. Force Offline Mode
+        # Force Offline Mode
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_id,
             local_files_only=True
