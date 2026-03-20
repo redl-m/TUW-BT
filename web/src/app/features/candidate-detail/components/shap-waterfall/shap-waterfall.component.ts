@@ -14,7 +14,11 @@ import { CommonModule } from '@angular/common';
         Calculating attributions...
       </div>
 
-      <div *ngIf="shapValues" class="chart-container">
+      <div *ngIf="shapValues && formattedShapData.length === 0" class="text-sm text-gray-500 italic mt-4">
+        No significantly impactful features (>0.5%) found.
+      </div>
+
+      <div *ngIf="shapValues && formattedShapData.length > 0" class="chart-container">
         <div *ngFor="let item of formattedShapData" class="data-row">
 
           <div class="text-row">
@@ -40,45 +44,57 @@ import { CommonModule } from '@angular/common';
     </div>
   `
 })
-
-/**
- * Component for displaying SHAP waterfall chart.
- * @param shapValues The SHAP values to display.
- * @param features The features used to generate the SHAP values.
- */
 export class ShapWaterfallComponent {
   @Input() shapValues: Record<string, number> | null | undefined = null;
-  @Input() features: Record<string, any> | undefined = {}; // <--- New Input
+  @Input() features: Record<string, any> | undefined = {};
 
-  /**
-   * Formats the SHAP values into a more readable format.
-   * @returns An array of objects with feature name, value, and normalized value.
-   */
   get formattedShapData() {
     if (!this.shapValues) return [];
 
-    let maxAbs = 0;
-    const items = Object.entries(this.shapValues).map(([feature, value]) => {
-      if (Math.abs(value) > maxAbs) maxAbs = Math.abs(value);
+    const entries = Object.entries(this.shapValues);
 
-      // Look up the feature value: Append it if it exists, otherwise use the feature name
+    // Calculate total absolute impact to turn raw log-odds into true percentages
+    const totalAbsoluteImpact = entries.reduce((sum, [_, val]) => sum + Math.abs(val), 0);
+
+    if (totalAbsoluteImpact === 0) return [];
+
+    // Map to true percentages and preserve your display label logic
+    let items = entries.map(([feature, rawValue]) => {
+      // Create decimal percentage between -1.0 and 1.0
+      const truePercentage = rawValue / totalAbsoluteImpact;
+      const absPercentage = Math.abs(truePercentage);
+
+      // Look up feature value
       let displayLabel = feature;
       if (this.features && this.features[feature] !== undefined && this.features[feature] !== '') {
-
         const featureValue = this.features[feature];
-        const valueStr = Array.isArray(featureValue) ? featureValue.join(', ') : featureValue; // handle arrays
+        const valueStr = Array.isArray(featureValue) ? featureValue.join(', ') : featureValue;
         displayLabel = `${feature}: ${valueStr}`;
       }
 
-      return { feature, displayLabel, value };
+      return {
+        feature,
+        displayLabel,
+        value: truePercentage,
+        absPercentage: absPercentage
+      };
     });
 
+    // Keep items with greater than 0.5% impact
+    items = items.filter(item => item.absPercentage > 0.005);
+
     // Sort items by absolute value in descending order
-    items.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+    items.sort((a, b) => b.absPercentage - a.absPercentage);
+
+    // Limit to the top 7 contributions
+    items = items.slice(0, 7);
+
+    // Scale the bars visually relative to the largest visible item so the UI looks balanced
+    const maxVisibleAbs = items.length > 0 ? items[0].absPercentage : 1;
 
     return items.map(item => ({
       ...item,
-      normalized: maxAbs > 0 ? Math.abs(item.value) / maxAbs : 0
+      normalized: maxVisibleAbs > 0 ? item.absPercentage / maxVisibleAbs : 0 // ensures largest bar is always 50%
     }));
   }
 }
