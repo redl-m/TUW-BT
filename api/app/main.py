@@ -51,21 +51,21 @@ async def process_queue():
                 print(f"❌ Error processing job: {e}")
 
         elif task_type == "EXTRACT_CV":
+
             candidate_id, file_path = queue_item[2], queue_item[3]
+
             try:
                 raw_text = await DocumentExtractor.extract_text_from_path(file_path)
+                # Unpack tuple extracted by parser
+                candidate_name, features = await asyncio.to_thread(cv_parser.parse_cv, raw_text)
 
-                # Offload heavy CV parsing LLM task
-                features = await asyncio.to_thread(cv_parser.parse_cv, raw_text)
-
-                # Wait for job weights to be ready before scoring
                 while not current_job_weights:
                     await asyncio.sleep(0.5)
 
-                # Offload Random Forest scoring
                 scores = await asyncio.to_thread(scorer.evaluate_candidate, features, current_job_weights)
 
                 # Update state
+                active_candidates[candidate_id].name = candidate_name
                 active_candidates[candidate_id].features = features
                 active_candidates[candidate_id].rf_score = float(scores["rf_score"])
                 active_candidates[candidate_id].user_score = float(scores["user_score"])
@@ -77,8 +77,8 @@ async def process_queue():
                 else:
                     active_candidates[candidate_id].shap_values = {}
 
-                # Queue XAI Generation
                 await candidate_queue.put((2, "GENERATE_XAI", candidate_id))
+
             except Exception as e:
                 print(f"❌ Error extracting CV for {candidate_id}")
                 traceback.print_exc()
@@ -125,21 +125,28 @@ async def upload_job(file: UploadFile = File(...)):
 
 
 @app.post("/api/upload/cvs")
+@app.post("/api/upload/cvs")
 async def upload_cvs(files: List[UploadFile] = File(...)):
     responses = []
     for file in files:
         cand_id = str(uuid.uuid4())
-        file_extension = os.path.splitext(file.filename)[1].lower()
+
+        # --- NEW: Extract and format a readable name from the filename ---
+        original_name = file.filename
+        file_extension = os.path.splitext(original_name)[1].lower()
+        display_name = os.path.splitext(original_name)[0].replace("_", " ").replace("-", " ").title()
+
         file_path = f"../data/raw_cvs/{cand_id}{file_extension}"
 
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Initialize the skeleton stub for the UI
+        # Pass the extracted name to the model
         active_candidates[cand_id] = Candidate(
             id=cand_id,
+            name=display_name,  # <--- Pass it here
             features=CandidateFeatures(),
-            rf_score=0.0, # Will be replaced when scored
+            rf_score=0.0,
             user_score=0.0,
             risk_flag=False,
             shap_values={},
