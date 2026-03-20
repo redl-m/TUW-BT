@@ -28,7 +28,7 @@ import { Candidate } from '../../../../core/models/candidate.model';
 
         <div class="scores-section flex-grow max-w-xl flex flex-col gap-4">
           <div class="score-row flex items-center gap-4">
-            <span class="score-label w-24 text-sm font-medium text-gray-600">Your Score</span>
+            <span class="score-label w-24 text-sm font-medium text-gray-600">User Score</span>
             <div class="progress-track flex-grow bg-gray-100 rounded-full h-3 overflow-hidden">
               <div class="progress-fill user-score h-full rounded-full transition-all duration-700"
                    [style.width.%]="(candidate.user_score || 0) * 100"></div>
@@ -37,7 +37,7 @@ import { Candidate } from '../../../../core/models/candidate.model';
           </div>
 
           <div class="score-row flex items-center gap-4">
-            <span class="score-label w-24 text-sm font-medium text-gray-600">AI Score (RF)</span>
+            <span class="score-label w-24 text-sm font-medium text-gray-600">Baseline Score</span>
             <div class="progress-track flex-grow bg-gray-100 rounded-full h-3 overflow-hidden">
               <div class="progress-fill ai-score h-full rounded-full transition-all duration-700"
                    [style.width.%]="(candidate.rf_score || 0) * 100"></div>
