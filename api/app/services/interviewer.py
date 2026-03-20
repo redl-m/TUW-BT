@@ -1,12 +1,14 @@
 import json
+import re
 from typing import Dict, Tuple, List
 from app.models.candidate import Candidate
+
 
 class InterviewerService:
     def __init__(self, model, tokenizer):
         self.model = model
         self.tokenizer = tokenizer
-        self.temperature = 0.6 # non-deterministic for text generation
+        self.temperature = 0.6  # non-deterministic for text generation
         self.terminators = [
             self.tokenizer.eos_token_id,
             self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
@@ -48,14 +50,17 @@ class InterviewerService:
         """Returns (executive_summary, interview_questions)"""
         messages = self._build_prompt(candidate, user_weights)
 
-        # Apply chat template
-        input_ids = self.tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, return_tensors="pt"
+        # Capture full encoding (includes input_ids and attention_mask)
+        inputs = self.tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            return_tensors="pt",
+            return_dict=True
         ).to(self.model.device)
 
-        # Generative settings using the class temperature
+        # This gives the model both the IDs and the attention mask
         outputs = self.model.generate(
-            input_ids,
+            **inputs,
             max_new_tokens=768,
             eos_token_id=self.terminators,
             do_sample=True,
@@ -63,18 +68,20 @@ class InterviewerService:
             top_p=0.9
         )
 
-        # Decode the generated output, skipping the prompt
-        response_text = self.tokenizer.decode(outputs[0][input_ids.shape[-1]:], skip_special_tokens=True)
+        # Decode only the new tokens
+        input_length = inputs['input_ids'].shape[-1] # inputs['input_ids'] to get the length for slicing
+        response_text = self.tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
 
         try:
-            # Clean up potential markdown blocks if the LLM adds them
-            cleaned_text = response_text.strip()
-            if cleaned_text.startswith("```json"):
-                cleaned_text = cleaned_text[7:]
-            if cleaned_text.endswith("```"):
-                cleaned_text = cleaned_text[:-3]
+            # Regex JSON Extraction
+            match = re.search(r'\{.*\}', response_text, re.DOTALL)
 
-            result = json.loads(cleaned_text.strip())
+            if not match:
+                raise ValueError("No valid JSON structure found in the LLM response.")
+
+            json_str = match.group(0)
+            result = json.loads(json_str)
+
             return result.get("executive_summary", ""), result.get("interview_questions", [])
 
         except (json.JSONDecodeError, ValueError) as e:
