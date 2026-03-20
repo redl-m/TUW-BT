@@ -17,9 +17,12 @@ import { Candidate } from '../../../../core/models/candidate.model';
           <div class="avatar">{{ initials }}</div>
           <div class="info flex flex-col justify-center">
             <span class="rank-badge mb-1">#{{ rank }}</span>
-            <h3 class="name text-lg font-semibold text-gray-900" [title]="candidate.features['Job Role'] || 'Candidate'">
-              {{ candidate.features['Job Role'] || 'Candidate' }}
+
+            <h3 class="name text-lg font-semibold text-gray-900" [title]="candidate.name">
+              {{ candidate.name }}
             </h3>
+
+            <span class="text-xs text-gray-500">{{ candidate.features['Job Role'] || 'No job role found' }}</span>
           </div>
         </div>
 
