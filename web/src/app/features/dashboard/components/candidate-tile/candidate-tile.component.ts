@@ -54,6 +54,7 @@ import { Candidate } from '../../../../core/models/candidate.model';
 
           <button
             class="view-btn bg-[#2e1065] text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-[#1e1b4b] transition-colors flex items-center gap-2 whitespace-nowrap"
+            style="font-family: inherit;"
             (click)="toggleExpand()">
             {{ isExpanded ? 'Hide Details' : 'View Details' }}
             <span class="text-xs transition-transform duration-200" [ngClass]="{'rotate-180': isExpanded}">▼</span>
