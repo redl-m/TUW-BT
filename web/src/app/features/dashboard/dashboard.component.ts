@@ -1,9 +1,11 @@
-import {Component, inject, OnInit} from '@angular/core';
+import {Component, inject, OnInit, OnDestroy} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {CandidateStore} from '../../core/state/candidate.store';
 import {WeightingSidebarComponent} from './components/weighting-sidebar/weighting-sidebar.component';
 import {CandidateListComponent} from './components/candidate-list/candidate-list.component';
 import {ApiService} from '../../core/services/api.service';
+import { Subject, takeUntil, debounceTime } from 'rxjs';
+import { toObservable } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-dashboard',
@@ -40,16 +42,55 @@ import {ApiService} from '../../core/services/api.service';
 /**
  * Main dashboard component.
  */
-export class DashboardComponent implements OnInit {
-  store = inject(CandidateStore);
+export class DashboardComponent implements OnInit, OnDestroy {
   apiService = inject(ApiService);
+  store = inject(CandidateStore);
+
+  // Convert the Signal into an Observable
+  jobWeights$ = toObservable(this.store.jobWeights);
+
+  private destroy$ = new Subject<void>();
+  isJobProcessed = false;
+  initialWeightsLoaded = false;
 
   /**
-   * Initializes the dashboard by subscribing to candidate updates.
+   * Initializes the dashboard by setting up WebSocket listeners and subscribing to the job weights Signal.
    */
   ngOnInit() {
-    this.apiService.connectToCandidateUpdates((candidates) => {
-      this.store.setCandidates(candidates);
+    // WebSocket Listener
+    this.apiService.connectToCandidateUpdates((data) => {
+      this.store.setCandidates(data.candidates);
+      this.isJobProcessed = data.is_job_processed;
+
+      // Anti-Snapback Lock
+      if (!this.initialWeightsLoaded) {
+        this.store.setJobWeights(data.job_weights);
+
+        // Lock the frontend once the LLM finishes
+        if (this.isJobProcessed) {
+          this.initialWeightsLoaded = true;
+        }
+      }
     });
+
+    // Listen to our new converted Observable
+    this.jobWeights$
+      .pipe(
+        takeUntil(this.destroy$),
+        debounceTime(200)
+      )
+      .subscribe(weights => {
+        if (this.initialWeightsLoaded && weights && Object.keys(weights).length > 0) {
+          this.apiService.updateWeights(weights).subscribe();
+        }
+      });
+  }
+
+  /**
+   * Cleans up the component by completing the destroy$ Subject.
+   */
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 }
