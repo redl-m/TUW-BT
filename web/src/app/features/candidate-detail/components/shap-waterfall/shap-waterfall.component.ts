@@ -66,7 +66,27 @@ export class ShapWaterfallComponent {
 
       // Look up feature value
       let displayLabel = feature;
-      if (this.features && this.features[feature] !== undefined && this.features[feature] !== '') {
+
+      // Detect and format One-Hot Encoded Categorical Variables
+      if (feature.includes('_')) {
+        // Splits "Job Hopping_High" into "Job Hopping" and "High"
+        const parts = feature.split('_');
+        const baseFeature = parts[0];
+        const categoryValue = parts.slice(1).join('_');
+
+        // Format the display string
+        const friendlyName = feature.replace('_', ' ');
+
+        // Check if the candidate actually possesses this categorical trait
+        let isTrue = false;
+        if (this.features && this.features[baseFeature] !== undefined) {
+          isTrue = String(this.features[baseFeature]).toLowerCase() === String(categoryValue).toLowerCase();
+        }
+
+        displayLabel = `${friendlyName}: ${isTrue ? 'True' : 'False'}`;
+      }
+      // Logic for regular numeric/string features
+      else if (this.features && this.features[feature] !== undefined && this.features[feature] !== '') {
         const featureValue = this.features[feature];
         const valueStr = Array.isArray(featureValue) ? featureValue.join(', ') : featureValue;
         displayLabel = `${feature}: ${valueStr}`;
@@ -80,16 +100,12 @@ export class ShapWaterfallComponent {
       };
     });
 
-    // Keep items with greater than 0.5% impact
+    // Apply Noise Filter, Sort, and Limits
     items = items.filter(item => item.absPercentage > 0.005);
-
-    // Sort items by absolute value in descending order
     items.sort((a, b) => b.absPercentage - a.absPercentage);
-
-    // Limit to the top 7 contributions
     items = items.slice(0, 7);
 
-    // Scale the bars visually relative to the largest visible item so the UI looks balanced
+    // Dynamic Bar Scaling
     const maxVisibleAbs = items.length > 0 ? items[0].absPercentage : 1;
 
     return items.map(item => ({
