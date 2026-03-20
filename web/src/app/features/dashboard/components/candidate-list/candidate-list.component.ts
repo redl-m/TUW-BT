@@ -11,19 +11,18 @@ import { SkeletonLoaderComponent } from '../../../../shared/ui/skeleton-loader/s
   template: `
     <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
 
-      <ng-container *ngIf="isProcessing">
-        <app-skeleton-loader *ngFor="let dummy of [1,2,3,4,5,6]"></app-skeleton-loader>
-      </ng-container>
-
       <ng-container *ngIf="!isProcessing">
         <div *ngIf="candidates.length === 0" class="col-span-full text-center text-gray-500 py-20 bg-white border-2 border-dashed border-gray-200 rounded-xl">
           Waiting for candidates to be uploaded...
         </div>
 
-        <app-candidate-tile
-          *ngFor="let candidate of candidates"
-          [candidate]="candidate">
-        </app-candidate-tile>
+        <ng-container *ngFor="let candidate of candidates; trackBy: trackById">
+
+          <app-skeleton-loader *ngIf="!candidate.rf_score || candidate.rf_score === 0"></app-skeleton-loader>
+
+          <app-candidate-tile *ngIf="candidate.rf_score && candidate.rf_score > 0" [candidate]="candidate"></app-candidate-tile>
+
+        </ng-container>
       </ng-container>
 
     </div>
@@ -38,4 +37,14 @@ import { SkeletonLoaderComponent } from '../../../../shared/ui/skeleton-loader/s
 export class CandidateListComponent {
   @Input({ required: true }) candidates: Candidate[] = [];
   @Input({ required: true }) isProcessing: boolean = false;
+
+  /**
+   * Tracks the candidate by its ID.
+   * @param index Index of the candidate in the array.
+   * @param candidate The candidate object to track.
+   * @returns The ID of the candidate.
+   */
+  trackById(index: number, candidate: any): string {
+    return candidate.id;
+  }
 }
