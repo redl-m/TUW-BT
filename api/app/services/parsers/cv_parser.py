@@ -103,7 +103,9 @@ class CVParserService:
             "1. NEVER hallucinate or invent data.\n"
             "2. If an integer field is completely missing from the resume, output 0.\n"
             "3. If a string field is completely missing, output \"\".\n"
-            "4. Output ONLY valid JSON. Do not include markdown formatting, explanations, or conversational text."
+            "4. DO NOT echo the JSON schema back in your response.\n"
+            "5. Output ONLY valid JSON. Do not include markdown formatting (like ```json), explanations, "
+            "or conversational text."
         )
 
         return [
@@ -138,20 +140,44 @@ class CVParserService:
     # Extracts the name before passing the rest to Pydantic
     def _clean_and_validate(self, response_text: str) -> tuple[str, CandidateFeatures]:
         try:
-            match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            decoder = json.JSONDecoder()
+            parsed_dicts = []
+            idx = 0
 
-            if not match:
+            # Extract all valid JSON objects from the text natively
+            while idx < len(response_text):
+                idx = response_text.find('{', idx)
+                if idx == -1:
+                    break
+                try:
+                    obj, end_offset = decoder.raw_decode(response_text[idx:])
+                    parsed_dicts.append(obj)
+                    idx += end_offset  # Move past the parsed object
+                except json.JSONDecodeError:
+                    idx += 1  # Move forward one character and try again
+
+            if not parsed_dicts:
                 raise ValueError("No valid JSON structure found in the LLM response.")
 
-            json_str = match.group(0)
-            parsed_dict = json.loads(json_str)
+            # Iterate in reverse to prefer the final generated object
+            candidate_data = None
+            for parsed_dict in reversed(parsed_dicts):
+                # Ignore the schema block if the LLM echoed it back
+                if "properties" in parsed_dict and "type" in parsed_dict:
+                    continue
 
-            # Pop the name out of the dictionary so it doesn't break CandidateFeatures validation
-            extracted_name = parsed_dict.pop("Name", "Unknown Candidate")
+                # Verify it has at least some candidate fields to qualify
+                if "Name" in parsed_dict:
+                    candidate_data = parsed_dict
+                    break
 
-            # Let Pydantic handle the rest of the mapping
-            return extracted_name, CandidateFeatures(**parsed_dict)
+            if not candidate_data:
+                raise ValueError("Could not find valid candidate data matching the schema.")
 
-        except (json.JSONDecodeError, ValueError) as e:
+            # Extract name and return mapped features
+            extracted_name = candidate_data.pop("Name", "Unknown Candidate")
+            return extracted_name, CandidateFeatures(**candidate_data)
+
+        except Exception as e:
             print(f"❌ CV Extraction failed or violated schema: {e}\nRaw Output: {response_text}")
             return "Unknown Candidate", CandidateFeatures()
