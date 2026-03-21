@@ -24,7 +24,8 @@ import { toObservable } from '@angular/core/rxjs-interop';
 
           <app-candidate-list
             [candidates]="store.candidates()"
-            [isProcessing]="store.isProcessing()">
+            [isProcessing]="store.isProcessing()"
+            [expectedCount]="store.expectedCandidateCount()">
           </app-candidate-list>
         </main>
 

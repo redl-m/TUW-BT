@@ -11,20 +11,21 @@ import { Candidate } from '../../../../core/models/candidate.model';
   template: `
     <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
 
-      <div *ngIf="candidates.length === 0" class="col-span-full text-center text-gray-500 py-20 bg-white border-2 border-dashed border-gray-200 rounded-xl">
+      <div *ngIf="!isProcessing && candidates.length === 0 && expectedCount === 0" class="col-span-full text-center text-gray-500 py-20 bg-white border-2 border-dashed border-gray-200 rounded-xl">
         Waiting for candidates to be uploaded...
       </div>
 
       <ng-container *ngFor="let candidate of sortedCandidates; let i = index; trackBy: trackById">
-
         <app-skeleton-loader *ngIf="!candidate.rf_score || candidate.rf_score === 0"></app-skeleton-loader>
-
         <app-candidate-tile
           *ngIf="candidate.rf_score && candidate.rf_score > 0"
           [candidate]="candidate"
           [rank]="i + 1">
         </app-candidate-tile>
+      </ng-container>
 
+      <ng-container *ngFor="let skeleton of skeletonArray">
+        <app-skeleton-loader></app-skeleton-loader>
       </ng-container>
 
     </div>
@@ -39,6 +40,7 @@ export class CandidateListComponent {
 
   @Input() candidates: Candidate[] = [];
   @Input({ required: true }) isProcessing: boolean = false;
+  @Input() expectedCount: number = 0;
 
   /**
    * Sorts the candidates by their RF score in descending order.
@@ -52,6 +54,15 @@ export class CandidateListComponent {
       const scoreB = b.rf_score || 0;
       return scoreB - scoreA;
     });
+  }
+
+  /**
+   * Generates an array of skeletons for pending candidates.
+   * @returns An array of skeletons.
+   */
+  get skeletonArray(): number[] {
+    const remaining = this.expectedCount - this.candidates.length;
+    return remaining > 0 ? Array(remaining).fill(0) : [];
   }
 
   /**

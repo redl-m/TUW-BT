@@ -5,12 +5,14 @@ interface CandidateState {
   candidates: Candidate[];
   jobWeights: Record<string, number>;
   isProcessing: boolean;
+  expectedCandidateCount: number;
 }
 
 const initialState: CandidateState = {
   candidates: [],
   jobWeights: {},
   isProcessing: false,
+  expectedCandidateCount: 0,
 };
 
 /**
@@ -76,6 +78,10 @@ export const CandidateStore = signalStore(
 
     setJobWeights(jobWeights: Record<string, number>) {
       patchState(store, { jobWeights });
+    },
+
+    setExpectedCandidateCount(count: number) {
+      patchState(store, { expectedCandidateCount: count });
     },
 
     updateWeight(feature: string, weight: number) {
