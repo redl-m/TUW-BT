@@ -121,6 +121,7 @@ export class UploadComponent {
     } else {
       this.cvFiles = [...this.cvFiles, ...Array.from(files)];
       this.apiService.uploadCvs(this.cvFiles).subscribe();
+      this.store.setExpectedCandidateCount(this.cvFiles.length);
     }
 
     // Check if both job and CV files are uploaded
