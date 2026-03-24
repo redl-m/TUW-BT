@@ -34,9 +34,13 @@ import {FormsModule} from '@angular/forms';
           <button class="btn-close" (click)="toggleSettings()">✕ Close</button>
         </div>
 
-        <div class="toggle-group mt-3">
-          <button [class.active]="llmSettings.provider === 'api'" (click)="setProvider('api')">Open WebUI API</button>
-          <button [class.active]="llmSettings.provider === 'local'" (click)="setProvider('local')">Local Model</button>
+        <div class="toggle-group mt-3" [class.disabled-group]="isEjecting">
+          <button [class.active]="llmSettings.provider === 'api'"
+                  [disabled]="isEjecting"
+                  (click)="setProvider('api')">Open WebUI API</button>
+          <button [class.active]="llmSettings.provider === 'local'"
+                  [disabled]="isEjecting"
+                  (click)="setProvider('local')">Local Model</button>
         </div>
 
         <div class="api-settings-form mt-4" *ngIf="llmSettings.provider === 'api'">
@@ -128,6 +132,7 @@ export class UploadComponent implements OnInit {
 
   // Settings State
   isSettingsOpen = false;
+  isEjecting = false;
   llmSettings = {
     provider: 'api',
     api_key: '',
@@ -170,9 +175,22 @@ export class UploadComponent implements OnInit {
   }
 
   ejectLocalModel() {
-    this.apiService.unloadLocalModel().subscribe(() => {
-      // Immediately update the status pill and settings box by re-fetching
-      this.fetchSettings();
+    this.isEjecting = true;
+    this.systemStatus.local = 'unloading'; // Immediate visual feedback
+
+    this.apiService.unloadLocalModel().subscribe({
+      next: () => {
+        // Add a slight delay to give the OS time to reclaim the VRAM
+        setTimeout(() => {
+          this.isEjecting = false;
+          this.fetchSettings();
+        }, 1500);
+      },
+      error: (err) => {
+        console.error("Failed to eject model", err);
+        this.isEjecting = false;
+        this.fetchSettings();
+      }
     });
   }
 
