@@ -59,6 +59,23 @@ export class ApiService {
   }
 
   /**
+   * Get the current LLM settings and connection status from the backend.
+   * @returns An observable that emits the current settings and status.
+   */
+  getLlmStatus(): Observable<any> {
+    return this.http.get('/api/llm/status');
+  }
+
+  /**
+   * Update the LLM configuration (switch between API/Local, set keys, etc.).
+   * @param settings The LLM settings payload.
+   * @returns An observable confirming the update.
+   */
+  updateLlmSettings(settings: any): Observable<any> {
+    return this.http.post('/api/llm/settings', settings);
+  }
+
+  /**
    * Connect to the WebSocket for candidate updates.
    * @param onUpdate A callback function to handle incoming updates.
    * @private
