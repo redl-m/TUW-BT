@@ -6,13 +6,13 @@ import os
 import shutil
 import traceback
 
-from app.models.job import Job
 from app.models.candidate import Candidate, CandidateFeatures
 from app.services.parsers.cv_parser import CVParserService
 from app.services.parsers.document_extractor import DocumentExtractor
 from app.services.scorer import ScorerService
 from app.services.interviewer import InterviewerService
 from app.services.parsers.job_parser import JobParserService
+from app.services.llm_manager import LLMManager, LLMSettings
 
 app = FastAPI(title="Actionable Transparency in AI Recruitment")
 
@@ -25,11 +25,14 @@ candidate_queue = asyncio.PriorityQueue()
 active_candidates: Dict[str, Candidate] = {}
 current_job_weights: Dict[str, float] = {}
 
+# Central LLM Manager
+llm_manager = LLMManager()
+
 # Initialize services
 scorer = ScorerService()
-cv_parser = CVParserService()
-interviewer = InterviewerService(model=cv_parser.model, tokenizer=cv_parser.tokenizer)
-job_parser = JobParserService(model=cv_parser.model, tokenizer=cv_parser.tokenizer)
+cv_parser = CVParserService(llm_manager=llm_manager)
+job_parser = JobParserService(llm_manager=llm_manager)
+interviewer = InterviewerService(llm_manager=llm_manager)
 
 
 async def process_queue():
@@ -210,3 +213,19 @@ async def candidate_updates(websocket: WebSocket):
             })
     except Exception as e:
         print(f"WebSocket disconnected")
+
+
+@app.get("/api/llm/status")
+async def get_llm_status():
+    return llm_manager.get_status()
+
+
+@app.post("/api/llm/settings")
+async def update_llm_settings(settings: LLMSettings):
+    llm_manager.update_settings(settings)
+
+    # Trigger load in background
+    if settings.provider == "local" and llm_manager.local_model is None:
+        asyncio.create_task(asyncio.to_thread(llm_manager.load_local_model))
+
+    return {"status": "success", "message": "LLM Settings updated successfully"}
