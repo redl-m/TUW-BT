@@ -35,7 +35,7 @@ import {FormsModule} from '@angular/forms';
         </div>
 
         <div class="toggle-group mt-3">
-          <button [class.active]="llmSettings.provider === 'api'" (click)="setProvider('api')">Open WebUI API</button>
+          <button [class.active]="llmSettings.provider === 'api'" (click)="setProvider('api')">TU Wien dataLAB API</button>
           <button [class.active]="llmSettings.provider === 'local'" (click)="setProvider('local')">Local Model</button>
         </div>
 
