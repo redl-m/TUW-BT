@@ -1,5 +1,6 @@
 import os
 import gc
+import sys
 import torch
 from pydantic import BaseModel
 from openai import OpenAI
@@ -11,18 +12,39 @@ class LLMSettings(BaseModel):
     api_key: str = ""
     base_url: str = "https://aqueduct.ai.datalab.tuwien.ac.at/v1"
     model_name: str = "qwen-coder-30b"
+    local_model_id: str = r"D:\huggingface\hub\models--meta-llama--Meta-Llama-3.1-8B-Instruct\snapshots\0e9e39f249a16976918f6564b8830bc894c89659" # absolute path or hf ID
+
+
+class TqdmInterceptor:
+    def __init__(self, manager):
+        self.manager = manager
+        self.original_stderr = sys.stderr
+        self.buffer = ""
+
+    def write(self, text):
+        self.original_stderr.write(text)
+        self.buffer += text
+        # progress are updated using carriage returns (\r)
+        if '\r' in self.buffer:
+            parts = self.buffer.split('\r')
+            for p in parts:
+                if '%' in p and '|' in p:
+                    self.manager.loading_progress = p.strip()
+            # Keep the trailing fragment
+            self.buffer = parts[-1]
+
+    def flush(self):
+        self.original_stderr.flush()
 
 
 class LLMManager:
     def __init__(self):
         self.settings = LLMSettings()
-
-        # Local model state (Lazy Loaded)
         self.local_model = None
         self.tokenizer = None
         self.terminators = []
         self.local_status = "unloaded"
-        self.local_model_id = r"D:\huggingface\hub\models--meta-llama--Meta-Llama-3.1-8B-Instruct\snapshots\0e9e39f249a16976918f6564b8830bc894c89659"
+        self.loading_progress = ""
 
     def update_settings(self, new_settings: LLMSettings):
         self.settings = new_settings
@@ -40,36 +62,48 @@ class LLMManager:
         }
 
     def load_local_model(self):
-        """Loads the HuggingFace model into memory only when requested."""
         if self.local_model is not None:
             return
 
         self.local_status = "loading"
-        print("Initializing Llama-3.1-8B via Hugging Face...")
+        self.loading_progress = "Initializing Hugging Face..."
+        print(f"Loading model: {self.settings.local_model_id}")
 
-        quantization_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-
-        self.tokenizer = AutoTokenizer.from_pretrained(self.local_model_id, local_files_only=True)
-        self.local_model = AutoModelForCausalLM.from_pretrained(
-            self.local_model_id,
-            device_map="auto",
-            quantization_config=quantization_config,
-            dtype=torch.float16,
-            local_files_only=True
-        )
+        # Hijack the standard error to catch the tqdm progress bar
+        interceptor = TqdmInterceptor(self)
+        sys.stderr = interceptor
 
         try:
-            eot_id = self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-            self.terminators = [self.tokenizer.eos_token_id, eot_id] if eot_id else [self.tokenizer.eos_token_id]
-        except:
-            self.terminators = [self.tokenizer.eos_token_id]
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+            )
 
-        self.local_status = "ready"
-        print("Local model loaded successfully.")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.settings.local_model_id)
+            self.local_model = AutoModelForCausalLM.from_pretrained(
+                self.settings.local_model_id,
+                device_map="auto",
+                quantization_config=quantization_config,
+                dtype=torch.float16
+            )
+
+            try:
+                eot_id = self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
+                self.terminators = [self.tokenizer.eos_token_id, eot_id] if eot_id else [self.tokenizer.eos_token_id]
+            except:
+                self.terminators = [self.tokenizer.eos_token_id]
+
+            self.local_status = "ready"
+            self.loading_progress = "Model loaded successfully."
+
+        except Exception as e:
+            self.local_status = "unloaded"
+            self.loading_progress = f"Error: {str(e)}"
+            raise e
+        finally:
+            # Always restore normal console output!
+            sys.stderr = interceptor.original_stderr
 
     def generate(self, messages: list, max_tokens: int = 1024, temperature: float = 0.6, do_sample: bool = True) -> str:
         """Central text generation routing."""
