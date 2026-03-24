@@ -1,4 +1,5 @@
 import os
+import gc
 import torch
 from pydantic import BaseModel
 from openai import OpenAI
@@ -116,3 +117,28 @@ class LLMManager:
 
             input_length = inputs['input_ids'].shape[-1]
             return self.tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
+
+    def unload_local_model(self):
+        """Unloads the HuggingFace model and forces aggressive VRAM cleanup."""
+        if self.local_model is not None:
+            print("Unloading local model to free VRAM...")
+
+            # Destroy references
+            del self.local_model
+            del self.tokenizer
+            self.local_model = None
+            self.tokenizer = None
+            self.terminators = []
+
+            # Force garbage collection multiple times to catch unlinked cyclic references
+            gc.collect()
+            gc.collect()
+
+            # Clean the CUDA cache
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()  # Block until all GPU operations finish
+                torch.cuda.empty_cache()  # Release the memory back to the OS
+                torch.cuda.ipc_collect()  # Clear inter-process communication memory
+
+        self.local_status = "unloaded"
+        print("Local model successfully unloaded and VRAM cleared.")
