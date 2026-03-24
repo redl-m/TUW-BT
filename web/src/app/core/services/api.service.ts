@@ -83,6 +83,20 @@ export class ApiService {
   }
 
   /**
+   * Fetch real-time hardware stats and loading progress.
+   */
+  getLlmStats(): Observable<any> {
+    return this.http.get('/api/llm/stats');
+  }
+
+  /**
+   * Manually trigger the local model load into VRAM.
+   */
+  loadLocalModel(): Observable<any> {
+    return this.http.post('/api/llm/load', {});
+  }
+
+  /**
    * Connect to the WebSocket for candidate updates.
    * @param onUpdate A callback function to handle incoming updates.
    * @private
