@@ -1,22 +1,61 @@
-import { Component, inject } from '@angular/core';
+import {Component, inject, OnInit} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { CandidateStore } from '../../core/state/candidate.store';
 import { ApiService } from '../../core/services/api.service';
+import {FormsModule} from '@angular/forms';
 
 @Component({
   selector: 'app-upload',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   styleUrls: ['./upload.component.scss'],
   template: `
     <div class="upload-layout">
+
+      <button class="settings-toggle-btn"
+              (click)="toggleSettings()"
+              [ngClass]="llmSettings.provider === 'api' ?
+                 (systemStatus.api === 'ready' ? 'status-ready' : 'status-warning') :
+                 (systemStatus.local === 'ready' ? 'status-ready' : 'status-loading')">
+        <span class="dot"></span>
+        <span class="pill-text">{{ getShortStatusText() }}</span>
+        <span class="icon">⚙️</span>
+      </button>
+
       <div class="header-text">
         <h1>AI Candidate Ranking System</h1>
         <p>Drop your job listing and candidate CVs to automatically begin evaluation</p>
       </div>
 
-      <div class="dropzone-container">
+      <div class="settings-card card" *ngIf="isSettingsOpen">
+        <div class="settings-header">
+          <h3>Engine Configuration</h3>
+          <button class="btn-close" (click)="toggleSettings()">✕ Close</button>
+        </div>
+
+        <div class="toggle-group mt-3">
+          <button [class.active]="llmSettings.provider === 'api'" (click)="setProvider('api')">Open WebUI API</button>
+          <button [class.active]="llmSettings.provider === 'local'" (click)="setProvider('local')">Local Model</button>
+        </div>
+
+        <div class="api-settings-form mt-4" *ngIf="llmSettings.provider === 'api'">
+          <div class="form-group">
+            <label>API Endpoint Base URL</label>
+            <input type="text" [(ngModel)]="llmSettings.base_url" (blur)="saveSettings()">
+          </div>
+          <div class="form-group">
+            <label>API Key (Bearer)</label>
+            <input type="password" placeholder="sk-..." [(ngModel)]="llmSettings.api_key" (blur)="saveSettings()">
+          </div>
+          <div class="form-group">
+            <label>Model Identifier</label>
+            <input type="text" [(ngModel)]="llmSettings.model_name" (blur)="saveSettings()">
+          </div>
+        </div>
+      </div>
+
+      <div class="dropzone-container" *ngIf="!isSettingsOpen">
 
         <div class="dropzone card"
              [class.drag-active]="isDraggingJob"
@@ -26,7 +65,6 @@ import { ApiService } from '../../core/services/api.service';
              (click)="jobInput.click()">
 
           <input type="file" #jobInput hidden accept=".pdf,.doc,.docx,.txt" (change)="onFileSelected($event, 'job')">
-
           <div class="icon-wrapper blue">📄</div>
 
           <ng-container *ngIf="!jobFile">
@@ -50,7 +88,6 @@ import { ApiService } from '../../core/services/api.service';
              (click)="cvInput.click()">
 
           <input type="file" #cvInput hidden multiple accept=".pdf,.doc,.docx" (change)="onFileSelected($event, 'cv')">
-
           <div class="icon-wrapper purple">👥</div>
 
           <ng-container *ngIf="cvFiles.length === 0">
@@ -69,16 +106,67 @@ import { ApiService } from '../../core/services/api.service';
     </div>
   `
 })
-export class UploadComponent {
+export class UploadComponent implements OnInit {
   router = inject(Router);
   store = inject(CandidateStore);
   apiService = inject(ApiService);
 
+  // Upload State
   jobFile: File | null = null;
   cvFiles: File[] = [];
-
   isDraggingJob = false;
   isDraggingCv = false;
+
+  // Settings State
+  isSettingsOpen = false;
+  llmSettings = {
+    provider: 'api',
+    api_key: '',
+    base_url: 'https://aqueduct.ai.datalab.tuwien.ac.at/v1',
+    model_name: 'qwen-coder-30b'
+  };
+
+  systemStatus = {
+    local: 'loading',
+    api: 'missing_key'
+  };
+
+  ngOnInit() {
+    this.fetchSettings();
+  }
+
+  toggleSettings() {
+    this.isSettingsOpen = !this.isSettingsOpen;
+  }
+
+  fetchSettings() {
+    this.apiService.getLlmStatus().subscribe(res => {
+      if (res) {
+        this.llmSettings = res.settings;
+        this.systemStatus = res.status;
+      }
+    });
+  }
+
+  setProvider(provider: 'api' | 'local') {
+    this.llmSettings.provider = provider;
+    this.saveSettings();
+  }
+
+  saveSettings() {
+    this.apiService.updateLlmSettings(this.llmSettings).subscribe(() => {
+      // Re-fetch status to update UI chips
+      this.fetchSettings();
+    });
+  }
+
+  getShortStatusText() {
+    if (this.llmSettings.provider === 'api') {
+      return this.systemStatus.api === 'ready' ? 'API Ready' : 'API Setup Req.';
+    } else {
+      return this.systemStatus.local === 'ready' ? 'Local Ready' : 'Local Loading...';
+    }
+  }
 
   onDragOver(event: DragEvent, type: 'job' | 'cv') {
     event.preventDefault();
