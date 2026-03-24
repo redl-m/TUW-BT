@@ -1,5 +1,5 @@
-import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
-import { Candidate } from '../models/candidate.model';
+import {patchState, signalStore, withMethods, withState} from '@ngrx/signals';
+import {Candidate} from '../models/candidate.model';
 
 interface CandidateState {
   candidates: Candidate[];
@@ -16,39 +16,37 @@ const initialState: CandidateState = {
 };
 
 /**
- * Recalculates the user score for each candidate based on the current weights.
+ * Recalculates the user score for each candidate based on SHAP modifications.
  * @param candidates The list of candidates to recalculate.
- * @param weights The current weights for each feature.
+ * @param weights The current weights for each feature (1 to 5).
  */
 function recalculateAndSort(candidates: Candidate[], weights: Record<string, number>): Candidate[] {
 
-  // Max values as defined in backend
-  const MAX_VALUES: Record<string, number> = {
-    "Experience (Years)": 10.0,
-    "Projects Count": 10.0,
-    "Structural Adherence": 5.0,
-    "Adaptive Fluidity": 5.0,
-    "Interpersonal Influence": 5.0,
-    "Execution Velocity": 5.0,
-    "Psychological Resilience": 5.0
-  };
-
   const updated = candidates.map(candidate => {
-    let numerator = 0;
-    let denominator = 0;
+    const safeRfScore = candidate.rf_score || 0;
+    const shapValues = candidate.shap_values || {};
 
-    Object.entries(weights).forEach(([key, currentWeight]) => {
-      const rawValue = candidate.features[key] || 0;
-      const maxVal = MAX_VALUES[key] || 5.0;
-      const normalizedValue = Math.min(rawValue / maxVal, 1.0);
+    // Reverse-engineer the base value (Expected Value)
+    let shapSum = 0;
+    // BaseValue = RF_Score - Sum(SHAP_Values
+    Object.values(shapValues).forEach(val => {
+      shapSum += val;
+    });
+    // Accumulate modified user score
+    let finalUserScore = safeRfScore - shapSum;
 
-      numerator += (normalizedValue * currentWeight);
-      denominator += currentWeight;
+    Object.entries(shapValues).forEach(([featureName, shapVal]) => {
+
+      const rawWeight = weights[featureName] !== undefined ? weights[featureName] : 3.0;
+      const multiplier = (rawWeight - 1.0) / 4.0; // Multiplier mapping
+      finalUserScore += (shapVal * multiplier);
     });
 
-    const finalUserScore = denominator > 0 ? numerator / denominator : 0;
-    const safeRfScore = candidate.rf_score || 0;
-    const riskFlag = (finalUserScore - safeRfScore) > 0.15;
+    // Ensure the final score strictly bounds between 0.0 and 1.0
+    finalUserScore = Math.max(0, Math.min(finalUserScore, 1.0));
+
+    // Calculate risk flag
+    const riskFlag = finalUserScore > safeRfScore && (finalUserScore - safeRfScore) >= 0.20;
 
     return {
       ...candidate,
@@ -57,6 +55,7 @@ function recalculateAndSort(candidates: Candidate[], weights: Record<string, num
     };
   });
 
+  // Sort descending by the newly calculated user score
   return updated.sort((a, b) => (b.user_score || 0) - (a.user_score || 0));
 }
 
