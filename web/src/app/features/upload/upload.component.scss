@@ -302,3 +302,15 @@
     }
   }
 }
+
+.btn-eject:disabled {
+  background: #fca5a5 !important;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.toggle-group.disabled-group {
+  opacity: 0.5;
+  pointer-events: none;
+}
