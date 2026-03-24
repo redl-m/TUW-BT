@@ -229,3 +229,9 @@ async def update_llm_settings(settings: LLMSettings):
         asyncio.create_task(asyncio.to_thread(llm_manager.load_local_model))
 
     return {"status": "success", "message": "LLM Settings updated successfully"}
+
+
+@app.post("/api/llm/unload")
+async def unload_llm_model():
+    llm_manager.unload_local_model()
+    return {"status": "success", "message": "Local model unloaded and VRAM cleared."}
