@@ -113,7 +113,16 @@ export const CandidateStore = signalStore(
       socket.onerror = (error) => {
         console.error('WebSocket Error:', error);
       };
-    }
+    },
 
+    /**
+     * Remove a candidate from the store.
+     * @param candidateId The ID of the candidate to delete.
+     */
+    removeCandidate(candidateId: string) {
+      patchState(store, (state) => ({
+        candidates: state.candidates.filter(c => c.id !== candidateId)
+      }));
+    }
   }))
 );
