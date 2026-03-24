@@ -5,29 +5,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from app.models.candidate import CandidateFeatures
 
 class CVParserService:
-    def __init__(self,
-                 model_id: str = r"D:\huggingface\hub\models--meta-llama--Meta-Llama-3.1-8B-Instruct\snapshots\0e9e39f249a16976918f6564b8830bc894c89659"):
-        print("Initializing Llama-3.1-8B via Hugging Face...")
-
-        quantization_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            device_map="auto",
-            quantization_config=quantization_config,
-            dtype=torch.float16,
-            local_files_only=True
-        )
-
-        self.terminators = [
-            self.tokenizer.eos_token_id,
-            self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-        ]
+    def __init__(self, llm_manager):
+        self.llm = llm_manager
 
     def _build_prompt(self, cv_text: str) -> list:
         json_schema = {
@@ -116,25 +95,8 @@ class CVParserService:
     def parse_cv(self, cv_text: str) -> tuple[str, CandidateFeatures]:
         messages = self._build_prompt(cv_text)
 
-        inputs = self.tokenizer.apply_chat_template(
-            messages,
-            add_generation_prompt=True,
-            return_tensors="pt",
-            return_dict=True
-        ).to(self.model.device)
-
-        outputs = self.model.generate(
-            **inputs,
-            max_new_tokens=1024,
-            eos_token_id=self.terminators,
-            do_sample=False,
-            temperature=None,
-            top_p=None
-        )
-
-        input_length = inputs['input_ids'].shape[-1]
-        response_text = self.tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
-
+        # Use central LLM manager
+        response_text = self.llm.generate(messages, max_tokens=1024, do_sample=False)
         return self._clean_and_validate(response_text)
 
     # Extracts the name before passing the rest to Pydantic
