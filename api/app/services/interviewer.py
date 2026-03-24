@@ -5,14 +5,8 @@ from app.models.candidate import Candidate
 
 
 class InterviewerService:
-    def __init__(self, model, tokenizer):
-        self.model = model
-        self.tokenizer = tokenizer
-        self.temperature = 0.6  # non-deterministic for text generation
-        self.terminators = [
-            self.tokenizer.eos_token_id,
-            self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-        ]
+    def __init__(self, llm_manager):
+        self.llm = llm_manager
 
     def _build_prompt(self, candidate: Candidate, user_weights: Dict[str, float]) -> list:
         # System instructions define the persona, constraints, and JSON requirement
@@ -47,43 +41,17 @@ class InterviewerService:
         ]
 
     def generate_narrative(self, candidate: Candidate, user_weights: Dict[str, float]) -> Tuple[str, List[str]]:
-        """Returns (executive_summary, interview_questions)"""
         messages = self._build_prompt(candidate, user_weights)
 
-        # Capture full encoding (includes input_ids and attention_mask)
-        inputs = self.tokenizer.apply_chat_template(
-            messages,
-            add_generation_prompt=True,
-            return_tensors="pt",
-            return_dict=True
-        ).to(self.model.device)
-
-        # This gives the model both the IDs and the attention mask
-        outputs = self.model.generate(
-            **inputs,
-            max_new_tokens=768,
-            eos_token_id=self.terminators,
-            do_sample=True,
-            temperature=self.temperature,
-            top_p=0.9
-        )
-
-        # Decode only the new tokens
-        input_length = inputs['input_ids'].shape[-1] # inputs['input_ids'] to get the length for slicing
-        response_text = self.tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
+        # Creative generation
+        response_text = self.llm.generate(messages, max_tokens=768, temperature=0.6, do_sample=True)
 
         try:
-            # Regex JSON Extraction
             match = re.search(r'\{.*\}', response_text, re.DOTALL)
-
             if not match:
-                raise ValueError("No valid JSON structure found in the LLM response.")
-
-            json_str = match.group(0)
-            result = json.loads(json_str)
-
+                raise ValueError("No valid JSON structure found.")
+            result = json.loads(match.group(0))
             return result.get("executive_summary", ""), result.get("interview_questions", [])
-
         except (json.JSONDecodeError, ValueError) as e:
             print(f"Narrative generation failed: {e}\nRaw output: {response_text}")
             return "Failed to generate summary.", ["Please review the candidate's profile manually."]
