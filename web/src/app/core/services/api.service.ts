@@ -59,6 +59,44 @@ export class ApiService {
   }
 
   /**
+   * Get the current LLM settings and connection status from the backend.
+   * @returns An observable that emits the current settings and status.
+   */
+  getLlmStatus(): Observable<any> {
+    return this.http.get('/api/llm/status');
+  }
+
+  /**
+   * Update the LLM configuration (switch between API/Local, set keys, etc.).
+   * @param settings The LLM settings payload.
+   * @returns An observable confirming the update.
+   */
+  updateLlmSettings(settings: any): Observable<any> {
+    return this.http.post('/api/llm/settings', settings);
+  }
+
+  /**
+   * Eject the local model to free VRAM.
+   */
+  unloadLocalModel(): Observable<any> {
+    return this.http.post('/api/llm/unload', {});
+  }
+
+  /**
+   * Fetch real-time hardware stats and loading progress.
+   */
+  getLlmStats(): Observable<any> {
+    return this.http.get('/api/llm/stats');
+  }
+
+  /**
+   * Manually trigger the local model load into VRAM.
+   */
+  loadLocalModel(): Observable<any> {
+    return this.http.post('/api/llm/load', {});
+  }
+
+  /**
    * Connect to the WebSocket for candidate updates.
    * @param onUpdate A callback function to handle incoming updates.
    * @private

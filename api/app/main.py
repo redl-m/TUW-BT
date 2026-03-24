@@ -1,3 +1,4 @@
+import torch
 from fastapi import FastAPI, UploadFile, File, WebSocket, BackgroundTasks
 from typing import List, Dict
 import asyncio
@@ -6,13 +7,13 @@ import os
 import shutil
 import traceback
 
-from app.models.job import Job
 from app.models.candidate import Candidate, CandidateFeatures
 from app.services.parsers.cv_parser import CVParserService
 from app.services.parsers.document_extractor import DocumentExtractor
 from app.services.scorer import ScorerService
 from app.services.interviewer import InterviewerService
 from app.services.parsers.job_parser import JobParserService
+from app.services.llm_manager import LLMManager, LLMSettings
 
 app = FastAPI(title="Actionable Transparency in AI Recruitment")
 
@@ -25,11 +26,14 @@ candidate_queue = asyncio.PriorityQueue()
 active_candidates: Dict[str, Candidate] = {}
 current_job_weights: Dict[str, float] = {}
 
+# Central LLM Manager
+llm_manager = LLMManager()
+
 # Initialize services
 scorer = ScorerService()
-cv_parser = CVParserService()
-interviewer = InterviewerService(model=cv_parser.model, tokenizer=cv_parser.tokenizer)
-job_parser = JobParserService(model=cv_parser.model, tokenizer=cv_parser.tokenizer)
+cv_parser = CVParserService(llm_manager=llm_manager)
+job_parser = JobParserService(llm_manager=llm_manager)
+interviewer = InterviewerService(llm_manager=llm_manager)
 
 
 async def process_queue():
@@ -210,3 +214,49 @@ async def candidate_updates(websocket: WebSocket):
             })
     except Exception as e:
         print(f"WebSocket disconnected")
+
+
+@app.get("/api/llm/status")
+async def get_llm_status():
+    return llm_manager.get_status()
+
+
+@app.post("/api/llm/settings")
+async def update_llm_settings(settings: LLMSettings):
+    llm_manager.update_settings(settings)
+    return {"status": "success", "message": "LLM Settings updated successfully"}
+
+
+@app.post("/api/llm/unload")
+async def unload_llm_model():
+    llm_manager.unload_local_model()
+    return {"status": "success", "message": "Local model unloaded and VRAM cleared."}
+
+
+@app.post("/api/llm/load")
+async def load_llm_model():
+    """Manual trigger to load the local model into VRAM."""
+    if llm_manager.local_model is None:
+        asyncio.create_task(asyncio.to_thread(llm_manager.load_local_model))
+    return {"status": "success", "message": "Loading started."}
+
+
+# In api/app/main.py
+
+@app.get("/api/llm/stats")
+async def get_llm_stats():
+    vram_used = 0
+    vram_total = 0
+    if torch.cuda.is_available():
+        free_vram, total_vram = torch.cuda.mem_get_info()
+        vram_used = (total_vram - free_vram) / (1024 ** 3)
+        vram_total = total_vram / (1024 ** 3)
+
+    return {
+        "used_gb": round(vram_used, 2),
+        "total_gb": round(vram_total, 2),
+        "percent": (vram_used / vram_total * 100) if vram_total > 0 else 0,
+        "progress_str": getattr(llm_manager, 'loading_progress', ''),
+        # NEW: Send the model status back with the hardware stats!
+        "local_status": getattr(llm_manager, 'local_status', 'unloaded')
+    }

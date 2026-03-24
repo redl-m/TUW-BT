@@ -4,13 +4,8 @@ from typing import Dict
 
 
 class JobParserService:
-    def __init__(self, model, tokenizer):
-        self.model = model
-        self.tokenizer = tokenizer
-        self.terminators = [
-            self.tokenizer.eos_token_id,
-            self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-        ]
+    def __init__(self, llm_manager):
+        self.llm = llm_manager
 
     def _build_prompt(self, job_text: str) -> list:
         # TODO: currently no education required
@@ -48,37 +43,16 @@ class JobParserService:
     def extract_baseline_weights(self, job_text: str) -> Dict[str, float]:
         messages = self._build_prompt(job_text)
 
-        # Return dict
-        inputs = self.tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, return_tensors="pt", return_dict=True
-        ).to(self.model.device)
-
-        # Unpack with **
-        outputs = self.model.generate(
-            **inputs,
-            max_new_tokens=512,
-            eos_token_id=self.terminators,
-            do_sample=False  # Temperature 0.0 for deterministic extraction
-        )
-
-        # Decode only the new tokens
-        input_length = inputs['input_ids'].shape[-1]
-        response_text = self.tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
+        # Deterministic extraction
+        response_text = self.llm.generate(messages, max_tokens=512, do_sample=False)
 
         try:
-            # Regex JSON Extraction
             match = re.search(r'\{.*\}', response_text, re.DOTALL)
-
             if not match:
-                raise ValueError("No valid JSON structure found in the LLM response.")
-
-            json_str = match.group(0)
-            weights = json.loads(json_str)
-            return weights
-
+                raise ValueError("No valid JSON structure found.")
+            return json.loads(match.group(0))
         except (json.JSONDecodeError, ValueError) as e:
             print(f"Weight extraction failed: {e}\nRaw Output: {response_text}")
-            # Fallback to neutral weights if parsing fails
             return {
                 "Experience (Years)": 3, "Projects Count": 3, "Structural Adherence": 3,
                 "Adaptive Fluidity": 3, "Interpersonal Influence": 3, "Execution Velocity": 3,
