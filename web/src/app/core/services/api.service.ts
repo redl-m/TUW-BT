@@ -76,6 +76,13 @@ export class ApiService {
   }
 
   /**
+   * Eject the local model to free VRAM.
+   */
+  unloadLocalModel(): Observable<any> {
+    return this.http.post('/api/llm/unload', {});
+  }
+
+  /**
    * Connect to the WebSocket for candidate updates.
    * @param onUpdate A callback function to handle incoming updates.
    * @private
