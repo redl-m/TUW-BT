@@ -35,7 +35,7 @@ import {FormsModule} from '@angular/forms';
         </div>
 
         <div class="toggle-group mt-3">
-          <button [class.active]="llmSettings.provider === 'api'" (click)="setProvider('api')">TU Wien dataLAB API</button>
+          <button [class.active]="llmSettings.provider === 'api'" (click)="setProvider('api')">Open WebUI API</button>
           <button [class.active]="llmSettings.provider === 'local'" (click)="setProvider('local')">Local Model</button>
         </div>
 
@@ -53,10 +53,20 @@ import {FormsModule} from '@angular/forms';
             <input type="text" [(ngModel)]="llmSettings.model_name" (blur)="saveSettings()">
           </div>
         </div>
+
+        <div class="eject-wrapper mt-4" *ngIf="systemStatus.local === 'ready' || systemStatus.local === 'loading'">
+          <div class="eject-info">
+            <span class="icon">💾</span>
+            <div>
+              <p class="eject-title">Local Model resides in VRAM</p>
+              <p class="eject-desc">Free up your GPU memory if you switched to the API.</p>
+            </div>
+          </div>
+          <button class="btn-eject" (click)="ejectLocalModel()">⏏️ Eject Model</button>
+        </div>
       </div>
 
       <div class="dropzone-container" *ngIf="!isSettingsOpen">
-
         <div class="dropzone card"
              [class.drag-active]="isDraggingJob"
              (dragover)="onDragOver($event, 'job')"
@@ -101,7 +111,6 @@ import {FormsModule} from '@angular/forms';
             <p class="font-semibold text-sm">Redirecting to dashboard...</p>
           </ng-container>
         </div>
-
       </div>
     </div>
   `
@@ -160,6 +169,26 @@ export class UploadComponent implements OnInit {
     });
   }
 
+  ejectLocalModel() {
+    this.apiService.unloadLocalModel().subscribe(() => {
+      // Immediately update the status pill and settings box by re-fetching
+      this.fetchSettings();
+    });
+  }
+
+  checkEngineReady(): boolean {
+    const isReady = this.llmSettings.provider === 'api'
+      ? this.systemStatus.api === 'ready'
+      : this.systemStatus.local === 'ready';
+
+    if (!isReady) {
+      alert("The selected AI Engine is not ready. Please configure your settings or wait for the model to load before uploading.");
+      this.isSettingsOpen = true; // Automatically pop open the settings
+      return false;
+    }
+    return true;
+  }
+
   getShortStatusText() {
     if (this.llmSettings.provider === 'api') {
       return this.systemStatus.api === 'ready' ? 'API Ready' : 'API Setup Req.';
@@ -189,6 +218,9 @@ export class UploadComponent implements OnInit {
     if (type === 'job') this.isDraggingJob = false;
     if (type === 'cv') this.isDraggingCv = false;
 
+    // Reject the drop if the engine is not ready
+    if (!this.checkEngineReady()) return;
+
     const files = event.dataTransfer?.files;
     if (files && files.length > 0) {
       this.processFiles(files, type);
@@ -197,6 +229,13 @@ export class UploadComponent implements OnInit {
 
   onFileSelected(event: Event, type: 'job' | 'cv') {
     const input = event.target as HTMLInputElement;
+
+    // Reject the click selection if the engine is not ready
+    if (!this.checkEngineReady()) {
+      input.value = '';
+      return;
+    }
+
     if (input.files && input.files.length > 0) {
       this.processFiles(input.files, type);
     }
