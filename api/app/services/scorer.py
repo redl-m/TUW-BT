@@ -105,76 +105,62 @@ class ScorerService:
         # Convert the dictionary back to a 1D numpy array strictly in the order of feature_columns
         return np.array([encoded_features[col] for col in self.feature_columns]).reshape(1, -1)
 
-    def calculate_user_score(self, features: CandidateFeatures, user_weights: Dict[str, float]) -> float:
-        """
-        Calculates the subjective recruiter score dynamically based on active slider weights.
-        Normalizes all raw features to a 0.0 - 1.0 scale so the final score is a true percentage.
-        """
-        # TODO: does this correctly calculate the score based off the RF score?
-        numerator = 0.0
-        denominator = 0.0
-
-        raw_dict = features.model_dump(by_alias=True)
-
-        # Define the "Maximum" expected values to calculate percentages
-        MAX_VALUES = {
-            "Experience (Years)": 10.0,  # 10 years = 100%
-            "Projects Count": 10.0,  # 10 projects = 100%
-            "Structural Adherence": 5.0,
-            "Adaptive Fluidity": 5.0,
-            "Interpersonal Influence": 5.0,
-            "Execution Velocity": 5.0,
-            "Psychological Resilience": 5.0
-        }
-
-        print("scorer.py/calculate_user_score: Features: " + str(features))
-        print("scorer.py/calculate_user_score: User Weights: " + str(user_weights))
-
-        for feature_name, weight in user_weights.items():
-            if feature_name in raw_dict and isinstance(raw_dict[feature_name], (int, float)):
-                raw_value = float(raw_dict[feature_name])
-
-                # Get the max value for this feature
-                max_val = MAX_VALUES.get(feature_name, 3.0)
-
-                # Normalize the value between 0.0 and 1.0 and cap it at 1.0
-                normalized_value = min(raw_value / max_val, 1.0)
-
-                # Calculate weighted score using the normalized value
-                numerator += (normalized_value * weight)
-                denominator += weight
-
-        return (numerator / denominator) if denominator > 0 else 0.0
-
     def evaluate_candidate(self, features: CandidateFeatures, user_weights: Dict[str, float]) -> dict:
-        """
-        The main pipeline: Formats data, predicts RF probability, calculates SHAP,
-        evaluates User Score, and checks the Risk Boundary.
-        """
-        # Prepare strict array
         X_matrix = self._prepare_feature_array(features)
 
-        # Normalize RF score in [0, 1]
+        # RF Prediction
         raw_rf_score = float(self.model.predict(X_matrix)[0])
         rf_score = (raw_rf_score / 100.0) if raw_rf_score > 1.0 else raw_rf_score
 
-        # Exact SHAP Attributions via TreeExplainer
+        # SHAP Attributions and the Base Value
         shap_results = self.explainer.shap_values(X_matrix)
 
-        if isinstance(shap_results, list):
-            candidate_shap_vals = shap_results[1][0]
-        else:
-            candidate_shap_vals = shap_results[0] if len(shap_results.shape) > 1 else shap_results
+        # Extract Base Value (Expected Value of the model) robustly
+        exp_val = self.explainer.expected_value
 
-        # Zip the SHAP values with the feature names
+        if isinstance(exp_val, (list, np.ndarray)):
+            if len(exp_val) > 1:
+                raw_base_value = float(exp_val[1])
+            else:
+                raw_base_value = float(exp_val[0])
+        else:
+            raw_base_value = float(exp_val)
+
+        # Handle candidate SHAP values structure
+        if isinstance(shap_results, list):
+            if len(shap_results) > 1:
+                candidate_shap_vals = shap_results[1][0]
+            else:
+                candidate_shap_vals = shap_results[0][0]
+        else:
+            if len(shap_results.shape) > 1:
+                candidate_shap_vals = shap_results[0]
+            else:
+                candidate_shap_vals = shap_results
+
+        # Define the scale factor dynamically based on the model's output range
+        scale_factor = 100.0 if (raw_rf_score > 1.0 or raw_base_value > 1.0) else 1.0
+
+        # Normalize the base value
+        base_value = raw_base_value / scale_factor
+
+        # Create the SHAP Dictionary
         shap_dict = {
-            self.feature_columns[i]: float(candidate_shap_vals[i])
+            self.feature_columns[i]: float(candidate_shap_vals[i]) / scale_factor # normalize
             for i in range(len(self.feature_columns))
             if candidate_shap_vals[i] != 0.0
         }
 
-        # Normalized user score using the function above
-        user_score = self.calculate_user_score(features, user_weights)
+        # Calculate user score
+        user_score_accumulator = base_value
+
+        for feature_name, shap_val in shap_dict.items():
+            raw_weight = user_weights.get(feature_name, 3.0)
+            multiplier = (raw_weight - 1.0) / 4.0
+            user_score_accumulator += (shap_val * multiplier)
+
+        # Ensure the user score stays within logical probability bounds [0.0, 1.0]
+        user_score = max(0.0, min(user_score_accumulator, 1.0))
 
         # Risk Flag Logic
         risk_flag = False

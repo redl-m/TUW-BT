@@ -43,15 +43,15 @@ export class CandidateListComponent {
   @Input() expectedCount: number = 0;
 
   /**
-   * Sorts the candidates by their RF score in descending order.
+   * Sorts the candidates by their baseline score in descending order.
    * @returns An array of sorted candidates.
    */
   get sortedCandidates(): Candidate[] {
     if (!this.candidates) return [];
 
     return [...this.candidates].sort((a, b) => {
-      const scoreA = a.rf_score || 0;
-      const scoreB = b.rf_score || 0;
+      const scoreA = a.user_score || 0;
+      const scoreB = b.user_score || 0;
       return scoreB - scoreA;
     });
   }
