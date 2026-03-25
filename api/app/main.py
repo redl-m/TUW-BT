@@ -51,6 +51,27 @@ async def process_queue():
                 # Offload heavy LLM extraction to a background thread
                 current_job_weights = await asyncio.to_thread(job_parser.extract_baseline_weights, job_text)
                 print(f"✅ Job Weights Processed: {current_job_weights}")
+
+                # NEW: Re-evaluate all existing candidates against the new job weights
+                for cand_id, cand in active_candidates.items():
+                    # Only re-evaluate if CV extraction is already complete
+                    if cand.features and hasattr(cand.features, 'model_dump'):
+                        scores = await asyncio.to_thread(scorer.evaluate_candidate, cand.features, current_job_weights)
+
+                        # Update state
+                        active_candidates[cand_id].rf_score = float(scores["rf_score"])
+                        active_candidates[cand_id].user_score = float(scores["user_score"])
+                        active_candidates[cand_id].risk_flag = bool(scores["risk_flag"])
+                        active_candidates[cand_id].shap_values = {k: float(v) for k, v in
+                                                                  scores.get("shap_values", {}).items()}
+
+                        # Reset the narrative so it generates a new one based on the new job
+                        active_candidates[cand_id].executive_summary = "Processing AI narrative..."
+                        active_candidates[cand_id].interview_questions = []
+
+                        # Queue up the candidate for XAI regeneration
+                        await candidate_queue.put((2, "GENERATE_XAI", cand_id))
+
             except Exception as e:
                 print(f"❌ Error processing job: {e}")
 
@@ -257,3 +278,11 @@ async def get_llm_stats():
         "progress_str": getattr(llm_manager, 'loading_progress', ''),
         "local_status": getattr(llm_manager, 'local_status', 'unloaded')
     }
+
+@app.delete("/api/candidates/{candidate_id}")
+async def delete_candidate(candidate_id: str):
+    """Removes a candidate from the active tracking dictionary."""
+    if candidate_id in active_candidates:
+        del active_candidates[candidate_id]
+        return {"status": "success", "message": f"Candidate {candidate_id} deleted"}
+    return {"status": "not_found", "message": "Candidate not found"}
