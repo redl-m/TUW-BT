@@ -4,8 +4,8 @@ import {CandidateStore} from '../../core/state/candidate.store';
 import {WeightingSidebarComponent} from './components/weighting-sidebar/weighting-sidebar.component';
 import {CandidateListComponent} from './components/candidate-list/candidate-list.component';
 import {ApiService} from '../../core/services/api.service';
-import { Subject, takeUntil, debounceTime } from 'rxjs';
-import { toObservable } from '@angular/core/rxjs-interop';
+import {Subject, takeUntil, debounceTime} from 'rxjs';
+import {toObservable} from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-dashboard',
@@ -100,8 +100,8 @@ import { toObservable } from '@angular/core/rxjs-interop';
 
               <div class="candidate-chips-container">
                 <div class="candidate-chip" *ngFor="let candidate of store.candidates()">
-                  <span class="candidate-name">{{ candidate.name }}</span>
-                  <button class="btn-delete-chip" (click)="deleteCandidate(candidate.id)" title="Remove {{ candidate.name }}">
+                  <span class="candidate-name">{{ formattedName(candidate.name) }}</span>
+                    <button class="btn-delete-chip" (click)="deleteCandidate(candidate.id)" title="Remove {{ formattedName(candidate.name) }}">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18"></line>
                       <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -141,7 +141,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   jobWeights$ = toObservable(this.store.jobWeights);
 
   private destroy$ = new Subject<void>();
-  isJobProcessed = false;
   initialWeightsLoaded = false;
   showUploadBox = false;
 
@@ -158,30 +157,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // WebSocket Listener
     this.apiService.connectToCandidateUpdates((data) => {
       this.store.setCandidates(data.candidates);
-      this.isJobProcessed = data.is_job_processed;
 
-      // Anti-Snapback Lock
+      // Anti-Snapback Lock: Only accept incoming weights if we haven't locked yet
       if (!this.initialWeightsLoaded) {
         this.store.setJobWeights(data.job_weights);
 
-        // Lock the frontend once the LLM finishes
-        if (this.isJobProcessed) {
+        // Lock the frontend once the backend signals the LLM has finished the job
+        if (data.is_job_processed) {
           this.initialWeightsLoaded = true;
         }
       }
     });
-
-    // Listen to our new converted Observable
-    this.jobWeights$
-      .pipe(
-        takeUntil(this.destroy$),
-        debounceTime(200)
-      )
-      .subscribe(weights => {
-        if (this.initialWeightsLoaded && weights && Object.keys(weights).length > 0) {
-          this.apiService.updateWeights(weights).subscribe();
-        }
-      });
   }
 
   /**
@@ -190,6 +176,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  // Helper to check if a job has been processed based on the store's weights
+  get isJobProcessed(): boolean {
+    return Object.keys(this.store.jobWeights()).length > 0;
   }
 
   /**
@@ -247,43 +238,64 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private processFiles(files: FileList, type: 'job' | 'cv') {
     if (type === 'job') {
       this.jobFile = files[0];
-      this.isJobProcessed = false;
-      this.apiService.uploadJob(this.jobFile).subscribe();
+      this.uploadNewJob(this.jobFile);
     } else {
-      // Isolate the newly dropped files
-      const newFiles = Array.from(files);
-
-      // Keep track of all files for the UI if needed
-      this.cvFiles = [...this.cvFiles, ...newFiles];
-
-      // Send new files to the backend
-      this.apiService.uploadCvs(newFiles).subscribe();
-
-      const currentCount = this.store.expectedCandidateCount() || 0;
-      this.store.setExpectedCandidateCount(currentCount + newFiles.length);
+      const fileArray = Array.from(files);
+      this.cvFiles = [...this.cvFiles, ...fileArray];
+      this.uploadAdditionalCvs(fileArray);
     }
+  }
+
+  uploadAdditionalCvs(files: File[]) {
+    // Add to the existing expected count to show the correct number of skeleton loaders
+    const newTotalCount = this.store.expectedCandidateCount() + files.length;
+    this.store.setExpectedCandidateCount(newTotalCount);
+
+    this.apiService.uploadCvs(files).subscribe({
+      next: () => console.log(`Queued ${files.length} new candidates`),
+      error: (err) => console.error('Upload failed:', err)
+    });
+  }
+
+  uploadNewJob(file: File) {
+    this.apiService.uploadJob(file).subscribe({
+      next: () => {
+        console.log('New job uploaded. Existing candidates will be re-evaluated shortly.');
+        // Optional: You could toggle a "recalculating" flag in your store here to show a spinner
+      },
+      error: (err) => console.error('Job upload failed:', err)
+    });
   }
 
   /**
    * Triggers the deletion of a candidate.
    * @param candidateId The ID of the candidate to delete.
    */
-  deleteCandidate(candidateId: string | undefined) {
-    if (!candidateId) return;
-
-    // Call the backend to delete
+  deleteCandidate(candidateId: string) {
     this.apiService.deleteCandidate(candidateId).subscribe({
       next: () => {
-        // Update the expected count so the UI doesn't think it's still processing
-        const currentCount = this.store.expectedCandidateCount();
-        if (currentCount > 0) {
-          this.store.setExpectedCandidateCount(currentCount - 1);
-        }
-
-        // Remove candidate from store
+        // Instantly remove the candidate from the local store so the UI updates
         this.store.removeCandidate(candidateId);
+
+        // Decrement the expected count so a skeleton loader doesn't appear
+        const currentExpectedCount = this.store.expectedCandidateCount();
+        if (currentExpectedCount > 0) {
+          this.store.setExpectedCandidateCount(currentExpectedCount - 1);
+        }
       },
-      error: (err) => console.error('Failed to delete candidate', err)
+      error: (err) => console.error('Failed to delete candidate:', err)
     });
+  }
+
+  /**
+   * Format the candidate's name to capitalize the first letter of each word.
+   */
+  formattedName(name: string | undefined): string {
+    if (!name) return 'Unknown Candidate';
+    return name
+      .toLowerCase()
+      .split(' ')
+      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 }
