@@ -1,16 +1,14 @@
 export interface CandidateFeatures {
-  'Experience (Years)': number;
-  'Education': string;
-  'Certifications': string;
-  'Job Role': string;
-  'Projects Count': number;
-  'Job Hopping': string;
-  'Technical Skills': string[];
-  'Structural Adherence': number;
-  'Adaptive Fluidity': number;
-  'Interpersonal Influence': number;
-  'Execution Velocity': number;
-  'Psychological Resilience': number;
+  'years_of_experience': number;
+  'education_level': string;
+  'projects_count': number;
+  'job_hopping': string;
+  'technical_skills': string[];
+  'structural_adherence': number;
+  'adaptive_fluidity': number;
+  'interpersonal_influence': number;
+  'execution_velocity': number;
+  'psychological_resilience': number;
 
   [key: string]: any;
 }

@@ -2,10 +2,14 @@ import os
 import json
 import joblib
 import numpy as np
+import pandas as pd
+
 import sys
 import shap
 
 import shap.explainers._explainer
+from pandas import DataFrame
+
 shap.explainers._explainer.is_transformers_lm = lambda *args, **kwargs: False # Force SHAP to skip the Hugging Face LM check
 
 from typing import Dict, List, Any
@@ -52,114 +56,69 @@ class ScorerService:
 
         self.RISK_BOUNDARY_THRESHOLD = 0.20
 
-    def _prepare_feature_array(self, features: CandidateFeatures) -> np.ndarray:
+    def _prepare_feature_array(self, features: CandidateFeatures) -> DataFrame:
         """
         Converts the Pydantic LLM output into the strict 1D array required by the RF.
-        Implements Explicit Indicator Encoding for missing/categorical data.
         """
-        # Handle missing numerical values by defaulting to 0
-        encoded_features: Dict[str, float] = {col: 0.0 for col in self.feature_columns}
-
-        # NUMERICAL & SOFT SKILL MAPPING
-
-        # Direct mapping for continuous variables and fixed soft skill integers
-        direct_mappings = {
-            "Experience (Years)": features.experienceYears,
-            "Projects Count": features.projectsCount,
-            "Structural Adherence": features.structuralAdherence,
-            "Adaptive Fluidity": features.adaptiveFluidity,
-            "Interpersonal Influence": features.interpersonalInfluence,
-            "Execution Velocity": features.executionVelocity,
-            "Psychological Resilience": features.psychologicalResilience,
+        encoded_features = {
+            "years_of_experience": float(features.years_of_experience) if features.years_of_experience else 0.0,
+            "education_level": 0.0, # Default
+            "structural_adherence": float(features.structural_adherence) if features.structural_adherence else 0.0,
+            "adaptive_fluidity": float(features.adaptive_fluidity) if features.adaptive_fluidity else 0.0,
+            "interpersonal_influence": float(features.interpersonal_influence) if features.interpersonal_influence else 0.0,
+            "execution_velocity": float(features.execution_velocity) if features.execution_velocity else 0.0,
+            "psychological_resilience": float(features.psychological_resilience) if features.psychological_resilience else 0.0
         }
 
-        for key, val in direct_mappings.items():
-            if key in encoded_features:
-                encoded_features[key] = float(val)
+        # Map UI education
+        edu_str = str(features.education).lower()
+        if any(x in edu_str for x in ['phd', 'doctor']): encoded_features["education_level"] = 4.0
+        elif any(x in edu_str for x in ['master', 'mba', 'm.tech', 'm.sc', 'ms']): encoded_features["education_level"] = 3.0
+        elif any(x in edu_str for x in ['bachelor', 'b.com', 'b.sc', 'bs', 'b.a', 'ba', 'b.tech']): encoded_features["education_level"] = 2.0
+        elif any(x in edu_str for x in ['high', 'fa', 'fsc', 'diploma']): encoded_features["education_level"] = 1.0
 
-        #  CATEGORICAL MAPPING
-
-        # Education
-        ed_val = features.education if features.education else "None"
-        ed_col = f"Education_{ed_val}"
-        if ed_col in encoded_features:
-            encoded_features[ed_col] = 1.0
-
-        # Certifications
-        cert_val = features.certifications if features.certifications else "None"
-        cert_col = f"Certifications_{cert_val}"
-        if cert_col in encoded_features:
-            encoded_features[cert_col] = 1.0
-
-        # Job Hopping
-        hop_col = f"Job Hopping_{features.jobHopping}"
-        if hop_col in encoded_features:
-            encoded_features[hop_col] = 1.0
-
-        # TECHNICAL SKILLS ARRAY using One-Hot/Multi-Hot Encoding
-        for skill in features.technical_skills:
-            skill_col = f"Skill_{skill.strip()}"
-            if skill_col in encoded_features:
-                encoded_features[skill_col] = 1.0
-
-        # Convert the dictionary back to a 1D numpy array strictly in the order of feature_columns
-        return np.array([encoded_features[col] for col in self.feature_columns]).reshape(1, -1)
+        # Convert the dictionary back to a 1D dataframe
+        ordered_features = {col: encoded_features[col] for col in self.feature_columns}
+        return pd.DataFrame([ordered_features])
 
     def evaluate_candidate(self, features: CandidateFeatures, user_weights: Dict[str, float]) -> dict:
         X_matrix = self._prepare_feature_array(features)
 
-        # RF Prediction
+        # RF Prediction: Regressor outputs a 0-100 score directly
         raw_rf_score = float(self.model.predict(X_matrix)[0])
-        rf_score = (raw_rf_score / 100.0) if raw_rf_score > 1.0 else raw_rf_score
+        rf_score = max(0.0, min(raw_rf_score / 100.0, 1.0)) # divide by 100 to get 0.0-1.0 ratio
 
-        # SHAP Attributions and the Base Value
+        # SHAP Attributions and Base Value
         shap_results = self.explainer.shap_values(X_matrix)
 
-        # Extract Base Value (Expected Value of the model) robustly
         exp_val = self.explainer.expected_value
+        raw_base_value = float(exp_val[0] if isinstance(exp_val, (list, np.ndarray)) else exp_val)
+        base_value = raw_base_value / 100.0 # Normalize to 0.0 - 1.0
 
-        if isinstance(exp_val, (list, np.ndarray)):
-            if len(exp_val) > 1:
-                raw_base_value = float(exp_val[1])
-            else:
-                raw_base_value = float(exp_val[0])
-        else:
-            raw_base_value = float(exp_val)
+        candidate_shap_vals = shap_results[0] # 2D array: [n_samples, n_features]
 
-        # Handle candidate SHAP values structure
-        if isinstance(shap_results, list):
-            if len(shap_results) > 1:
-                candidate_shap_vals = shap_results[1][0]
-            else:
-                candidate_shap_vals = shap_results[0][0]
-        else:
-            if len(shap_results.shape) > 1:
-                candidate_shap_vals = shap_results[0]
-            else:
-                candidate_shap_vals = shap_results
-
-        # Define the scale factor dynamically based on the model's output range
-        scale_factor = 100.0 if (raw_rf_score > 1.0 or raw_base_value > 1.0) else 1.0
-
-        # Normalize the base value
-        base_value = raw_base_value / scale_factor
-
-        # Create the SHAP Dictionary
+        # Create the Normalized SHAP Dictionary
         shap_dict = {
-            self.feature_columns[i]: float(candidate_shap_vals[i]) / scale_factor # normalize
+            self.feature_columns[i]: float(candidate_shap_vals[i]) / 100.0
             for i in range(len(self.feature_columns))
-            if candidate_shap_vals[i] != 0.0
         }
 
-        # Calculate user score
+        # Calculate User Score
         user_score_accumulator = base_value
 
-        for feature_name, shap_val in shap_dict.items():
-            raw_weight = user_weights.get(feature_name, 3.0)
-            multiplier = (raw_weight - 1.0) / 4.0
-            user_score_accumulator += (shap_val * multiplier)
+        # Define features that are intrinsic and cannot be altered by UI sliders
+        intrinsic_features = ["job_hopping"]
 
-        # Ensure the user score stays within logical probability bounds [0.0, 1.0]
+        for feature_name, shap_val in shap_dict.items():
+            if feature_name in intrinsic_features:
+                user_score_accumulator += shap_val # add SHAP value directly to user score
+            else:
+                # 1-5 UI mapping
+                raw_weight = user_weights.get(feature_name, 3.0)
+                multiplier = (raw_weight - 1.0) / 4.0
+                user_score_accumulator += (shap_val * multiplier)
+
+        # Ensure the user score stays within logical bounds [0.0, 1.0]
         user_score = max(0.0, min(user_score_accumulator, 1.0))
 
         # Risk Flag Logic

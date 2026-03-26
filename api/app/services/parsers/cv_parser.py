@@ -16,61 +16,53 @@ class CVParserService:
                     "type": "string",
                     "description": "The candidate's full name. If not found, output 'Unknown Candidate'"
                 },
-                "Technical Skills": {
+                "technical_skills": {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "List of specific technical skills, programming languages, and tools"
                 },
-                "Experience (Years)": {
+                "years_of_experience": {
                     "type": "integer",
                     "description": "Total years of professional experience"
                 },
-                "Education": {
+                "education": {
                     "type": "string",
                     "description": "Highest degree (e.g., B.Sc, B.Tech, M.Tech, MBA, PhD, None)"
                 },
-                "Certifications": {
-                    "type": "string",
-                    "description": "Key certifications (e.g., AWS Certified, Google ML, None)"
-                },
-                "Job Role": {
-                    "type": "string",
-                    "description": "Current or primary job role title"
-                },
-                "Projects Count": {
+                "projects_count": {
                     "type": "integer",
                     "description": "Number of distinct projects listed"
                 },
-                "Job Hopping": {
+                "job_hopping": {
                     "type": "string",
                     "description": "Assess frequency of job changes: 'Low', 'Medium', or 'High'"
                 },
-                "Structural Adherence": {
+                "structural_adherence": {
                     "type": "integer",
                     "description": "Rate 1-5 how well resume matches standard professional structures"
                 },
-                "Adaptive Fluidity": {
+                "adaptive_fluidity": {
                     "type": "integer",
                     "description": "Rate 1-5 evidence of learning new technologies quickly"
                 },
-                "Interpersonal Influence": {
+                "interpersonal_influence": {
                     "type": "integer",
                     "description": "Rate 1-5 evidence of leadership, mentoring, or teamwork"
                 },
-                "Execution Velocity": {
+                "execution_velocity": {
                     "type": "integer",
                     "description": "Rate 1-5 evidence of delivering projects quickly or meeting deadlines"
                 },
-                "Psychological Resilience": {
+                "psychological_resilience": {
                     "type": "integer",
                     "description": "Rate 1-5 evidence of overcoming challenges or long-term dedication"
                 }
             },
             "required": [
-                "Name", "Technical Skills", "Experience (Years)", "Education", "Certifications", # <-- Added Name here
-                "Job Role", "Projects Count", "Job Hopping", "Structural Adherence",
-                "Adaptive Fluidity", "Interpersonal Influence", "Execution Velocity",
-                "Psychological Resilience"
+                "Name", "technical_skills", "years_of_experience", "education",
+                "projects_count", "job_hopping", "structural_adherence",
+                "adaptive_fluidity", "interpersonal_influence", "execution_velocity",
+                "psychological_resilience"
             ]
         }
 
