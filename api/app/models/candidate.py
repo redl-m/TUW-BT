@@ -4,22 +4,20 @@ from typing import List, Optional, Dict
 
 class CandidateFeatures(BaseModel):
     # Core Attributes
-    experienceYears: int = Field(default=0, alias="Experience (Years)")
-    education: str = Field(default="", alias="Education")
-    certifications: str = Field(default="", alias="Certifications")
-    jobRole: str = Field(default="", alias="Job Role")
-    projectsCount: int = Field(default=0, alias="Projects Count")
-    jobHopping: str = Field(default="Low", alias="Job Hopping")
+    years_of_experience: int = Field(default=0, alias="years_of_experience")
+    education: str = Field(default="", alias="education_level")
+    projects_count: int = Field(default=0, alias="projects_count")
+    job_hopping: str = Field(default="Low", alias="job_hopping")
 
     # Technical Skills List as array
-    technical_skills: List[str] = Field(default_factory=list, alias="Technical Skills")
+    technical_skills: List[str] = Field(default_factory=list, alias="technical_skills")
 
-    # Fix, explicit soft skills
-    structuralAdherence: int = Field(default=0, alias="Structural Adherence")
-    adaptiveFluidity: int = Field(default=0, alias="Adaptive Fluidity")
-    interpersonalInfluence: int = Field(default=0, alias="Interpersonal Influence")
-    executionVelocity: int = Field(default=0, alias="Execution Velocity")
-    psychologicalResilience: int = Field(default=0, alias="Psychological Resilience")
+    # Soft skills
+    structural_adherence: int = Field(default=0, alias="structural_adherence")
+    adaptive_fluidity: int = Field(default=0, alias="adaptive_fluidity")
+    interpersonal_influence: int = Field(default=0, alias="interpersonal_influence")
+    execution_velocity: int = Field(default=0, alias="execution_velocity")
+    psychological_resilience: int = Field(default=0, alias="psychological_resilience")
 
     class Config:
         populate_by_name = True
