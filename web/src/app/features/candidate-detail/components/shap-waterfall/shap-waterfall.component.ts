@@ -1,6 +1,17 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
+const FEATURE_NAME_MAP: Record<string, string> = {
+  'years_of_experience': 'Years of Experience',
+  'education_level': 'Education Level',
+  'job_hopping': 'Job Hopping History',
+  'structural_adherence': 'Structural Adherence',
+  'adaptive_fluidity': 'Adaptive Fluidity',
+  'interpersonal_influence': 'Interpersonal Influence',
+  'execution_velocity': 'Execution Velocity',
+  'psychological_resilience': 'Psychological Resilience'
+};
+
 @Component({
   selector: 'app-shap-waterfall',
   standalone: true,
@@ -53,64 +64,37 @@ export class ShapWaterfallComponent {
 
     const entries = Object.entries(this.shapValues);
 
-    // Calculate total absolute impact to turn raw log-odds into true percentages
-    const totalAbsoluteImpact = entries.reduce((sum, [_, val]) => sum + Math.abs(val), 0);
+    // Map directly from the SHAP values using the dictionary
+    let items = entries.map(([featureKey, rawValue]) => {
 
-    if (totalAbsoluteImpact === 0) return [];
+      const friendlyName = FEATURE_NAME_MAP[featureKey] || featureKey;
 
-    // Map to true percentages and preserve your display label logic
-    let items = entries.map(([feature, rawValue]) => {
-      // Create decimal percentage between -1.0 and 1.0
-      const truePercentage = rawValue / totalAbsoluteImpact;
-      const absPercentage = Math.abs(truePercentage);
-
-      // Look up feature value
-      let displayLabel = feature;
-
-      // Detect and format One-Hot Encoded Categorical Variables
-      if (feature.includes('_')) {
-        // Splits "Job Hopping_High" into "Job Hopping" and "High"
-        const parts = feature.split('_');
-        const baseFeature = parts[0];
-        const categoryValue = parts.slice(1).join('_');
-
-        // Format the display string
-        const friendlyName = feature.replace('_', ' ');
-
-        // Check if the candidate actually possesses this categorical trait
-        let isTrue = false;
-        if (this.features && this.features[baseFeature] !== undefined) {
-          isTrue = String(this.features[baseFeature]).toLowerCase() === String(categoryValue).toLowerCase();
-        }
-
-        displayLabel = `${friendlyName}: ${isTrue ? 'True' : 'False'}`;
+      // Extract the candidate's data value for this trait
+      let featureValueStr = '';
+      if (this.features && this.features[featureKey] !== undefined) {
+        featureValueStr = String(this.features[featureKey]);
       }
-      // Logic for regular numeric/string features
-      else if (this.features && this.features[feature] !== undefined && this.features[feature] !== '') {
-        const featureValue = this.features[feature];
-        const valueStr = Array.isArray(featureValue) ? featureValue.join(', ') : featureValue;
-        displayLabel = `${feature}: ${valueStr}`;
-      }
+
+      // Combine them into a clean label: "Education Level: MBA"
+      const displayLabel = featureValueStr ? `${friendlyName}: ${featureValueStr}` : friendlyName;
 
       return {
-        feature,
-        displayLabel,
-        value: truePercentage,
-        absPercentage: absPercentage
+        feature: featureKey,
+        displayLabel: displayLabel,
+        value: rawValue, // handled by backend
+        absPercentage: Math.abs(rawValue)
       };
     });
 
-    // Apply Noise Filter, Sort, and Limits
-    items = items.filter(item => item.absPercentage > 0.005);
-    items.sort((a, b) => b.absPercentage - a.absPercentage);
-    items = items.slice(0, 7);
-
-    // Dynamic Bar Scaling
-    const maxVisibleAbs = items.length > 0 ? items[0].absPercentage : 1;
+    // Apply Filters
+    items = items.filter(item => item.absPercentage > 0.005); // only features > 0.5% impact
+    items.sort((a, b) => b.absPercentage - a.absPercentage); // sort
+    items = items.slice(0, 7); // limit to top 7
+    const maxVisibleAbs = items.length > 0 ? items[0].absPercentage : 1; // bar scaling
 
     return items.map(item => ({
       ...item,
-      normalized: maxVisibleAbs > 0 ? item.absPercentage / maxVisibleAbs : 0 // ensures largest bar is always 50%
+      normalized: maxVisibleAbs > 0 ? (item.absPercentage / maxVisibleAbs) : 0
     }));
   }
 }
