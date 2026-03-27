@@ -16,9 +16,10 @@ import { Candidate } from '../../../../core/models/candidate.model';
       </div>
 
       <ng-container *ngFor="let candidate of sortedCandidates; let i = index; trackBy: trackById">
-        <app-skeleton-loader *ngIf="!candidate.rf_score || candidate.rf_score === 0"></app-skeleton-loader>
+        <app-skeleton-loader *ngIf="candidate.executive_summary === 'Processing AI narrative...'"></app-skeleton-loader>
+
         <app-candidate-tile
-          *ngIf="candidate.rf_score && candidate.rf_score > 0"
+          *ngIf="candidate.executive_summary !== 'Processing AI narrative...'"
           [candidate]="candidate"
           [rank]="i + 1">
         </app-candidate-tile>
