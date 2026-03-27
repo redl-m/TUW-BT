@@ -241,8 +241,6 @@ async def load_llm_model():
     return {"status": "success", "message": "Loading started."}
 
 
-# In api/app/main.py
-
 @app.get("/api/llm/stats")
 async def get_llm_stats():
     vram_used = 0
@@ -257,6 +255,5 @@ async def get_llm_stats():
         "total_gb": round(vram_total, 2),
         "percent": (vram_used / vram_total * 100) if vram_total > 0 else 0,
         "progress_str": getattr(llm_manager, 'loading_progress', ''),
-        # NEW: Send the model status back with the hardware stats!
         "local_status": getattr(llm_manager, 'local_status', 'unloaded')
     }
