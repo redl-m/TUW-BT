@@ -2,17 +2,22 @@ import os
 import gc
 import sys
 import torch
+from dotenv import load_dotenv
 from pydantic import BaseModel
 from openai import OpenAI
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 
 class LLMSettings(BaseModel):
+    load_dotenv()
     provider: str = "api"  # Default to API
-    api_key: str = ""
+    api_key: str = os.getenv("API_KEY", "")
     base_url: str = "https://aqueduct.ai.datalab.tuwien.ac.at/v1"
     model_name: str = "qwen-coder-30b"
-    local_model_id: str = r"D:\huggingface\hub\models--meta-llama--Meta-Llama-3.1-8B-Instruct\snapshots\0e9e39f249a16976918f6564b8830bc894c89659" # absolute path or hf ID
+    local_model_id: str = r"D:\huggingface\hub\models--meta-llama--Meta-Llama-3.1-8B-Instruct\snapshots\0e9e39f249a16976918f6564b8830bc894c89659"  # absolute path or hf ID
+
+    if not api_key:
+        raise ValueError("API_KEY is not set in the environment.")
 
 
 class TqdmInterceptor:
