@@ -202,7 +202,7 @@ async def candidate_updates(websocket: WebSocket):
 
             # Send defaults if not processed yet
             display_weights = current_job_weights if is_job_processed else {
-                "Experience (Years)": 3, "Projects Count": 3, "Structural Adherence": 3,
+                "Years of Experience": 3, "Education Level": 3, "Structural Adherence": 3,
                 "Adaptive Fluidity": 3, "Interpersonal Influence": 3, "Execution Velocity": 3,
                 "Psychological Resilience": 3
             }
