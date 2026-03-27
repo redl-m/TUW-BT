@@ -26,7 +26,7 @@ import { VisualSliderComponent } from '../../../../shared/ui/visual-slider/visua
       <div class="sliders-container" [class.disabled-sliders]="disabled">
         <app-visual-slider
           *ngFor="let key of weightKeys"
-          [label]="key"
+          [label]="getDisplayName(key)"
           [description]="getFeatureDescription(key)"
           [value]="store.jobWeights()[key]"
           [impactPercentage]="getImpactPercentage(key)"
@@ -54,8 +54,33 @@ export class WeightingSidebarComponent {
   @Input() disabled: boolean = false;
   store = inject(CandidateStore);
 
+  // Display names
+  private readonly featureDisplayNames: Record<string, string> = {
+    'years_of_experience': 'Years of Experience',
+    'education_level': 'Education Level',
+    'projects_count': 'Projects Count',
+    'job_hopping': 'Job Hopping',
+    'technical_skills': 'Technical Skills',
+    'structural_adherence': 'Structural Adherence',
+    'adaptive_fluidity': 'Adaptive Fluidity',
+    'interpersonal_influence': 'Interpersonal Influence',
+    'execution_velocity': 'Execution Velocity',
+    'psychological_resilience': 'Psychological Resilience'
+  };
+
   get weightKeys(): string[] {
     return Object.keys(this.store.jobWeights());
+  }
+
+  getDisplayName(key: string): string {
+    return this.featureDisplayNames[key] || this.formatUnknownKey(key);
+  }
+
+  private formatUnknownKey(key: string): string {
+    return key
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 
   // Dynamically calculate the % impact based on the sum of all current sliders
@@ -69,13 +94,14 @@ export class WeightingSidebarComponent {
   // Helper map to provide the subtitles
   getFeatureDescription(key: string): string {
     const descriptions: Record<string, string> = {
-      'Experience (Years)': 'Total years of professional experience',
-      'Projects Count': 'Number of distinct projects completed',
-      'Structural Adherence': 'Resume structure and professional formatting',
-      'Adaptive Fluidity': 'Ability to learn new technologies quickly',
-      'Interpersonal Influence': 'Leadership, mentoring, and teamwork skills',
-      'Execution Velocity': 'Speed of delivery and meeting deadlines',
-      'Psychological Resilience': 'Overcoming challenges and long-term dedication'
+      'years_of_experience': 'Total years of professional experience',
+      'education_level': 'Highest education level achieved',
+      'projects_count': 'Number of distinct projects completed',
+      'structural_adherence': 'Ability to follow strict protocols and thrive in established hierarchies',
+      'adaptive_fluidity': 'Capacity to navigate ambiguity and function without clear instructions',
+      'interpersonal_influence': 'Ability to persuade stakeholders and drive alignment without direct authority',
+      'execution_velocity': 'Bias for action, prioritizing rapid output over absolute perfection',
+      'psychological_resilience': 'Maintains emotional stability through setbacks, criticism, and delayed rewards'
     };
 
     return descriptions[key] || 'Dynamic feature extracted by LLM';
