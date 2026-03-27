@@ -72,7 +72,10 @@ export const CandidateStore = signalStore(
     },
 
     setCandidates(candidates: Candidate[]) {
-      patchState(store, { candidates });
+      patchState(store, (state) => ({
+        // Re-apply current states to incoming backend data
+        candidates: recalculateAndSort(candidates, state.jobWeights)
+      }));
     },
 
     setJobWeights(jobWeights: Record<string, number>) {
