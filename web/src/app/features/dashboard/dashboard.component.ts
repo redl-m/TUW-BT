@@ -26,7 +26,7 @@ import {toObservable} from '@angular/core/rxjs-interop';
             <div class="header-actions">
               <div class="status-tile" [ngClass]="isJobProcessed ? 'status-ready' : 'status-processing'">
                 <span class="status-dot"></span>
-                <span class="status-text">{{ isJobProcessed ? 'Status: Ready' : 'Status: Processing...' }}</span>
+                <span class="status-text">{{ isJobProcessed ? 'Job Description: Ready' : 'Job Description: Processing...' }}</span>
               </div>
 
               <button class="btn-manage" (click)="toggleUploadBox()">
@@ -180,7 +180,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // Helper to check if a job has been processed based on the store's weights
   get isJobProcessed(): boolean {
-    return Object.keys(this.store.jobWeights()).length > 0;
+    return this.initialWeightsLoaded;
   }
 
   /**
