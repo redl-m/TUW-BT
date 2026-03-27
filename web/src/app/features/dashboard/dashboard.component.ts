@@ -4,7 +4,7 @@ import {CandidateStore} from '../../core/state/candidate.store';
 import {WeightingSidebarComponent} from './components/weighting-sidebar/weighting-sidebar.component';
 import {CandidateListComponent} from './components/candidate-list/candidate-list.component';
 import {ApiService} from '../../core/services/api.service';
-import {Subject, takeUntil, debounceTime} from 'rxjs';
+import {Subject} from 'rxjs';
 import {toObservable} from '@angular/core/rxjs-interop';
 
 @Component({
@@ -99,9 +99,16 @@ import {toObservable} from '@angular/core/rxjs-interop';
               </div>
 
               <div class="candidate-chips-container">
-                <div class="candidate-chip" *ngFor="let candidate of store.candidates()">
+                <div class="candidate-chip"
+                     *ngFor="let candidate of store.candidates()"
+                     [class.shimmer]="candidate.executive_summary === 'Processing AI narrative...'">
+
                   <span class="candidate-name">{{ formattedName(candidate.name) }}</span>
-                    <button class="btn-delete-chip" (click)="deleteCandidate(candidate.id)" title="Remove {{ formattedName(candidate.name) }}">
+
+                  <button class="btn-delete-chip"
+                          (click)="deleteCandidate(candidate.id)"
+                          title="Remove {{ formattedName(candidate.name) }}"
+                          [disabled]="candidate.executive_summary === 'Processing AI narrative...'">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18"></line>
                       <line x1="6" y1="6" x2="18" y2="18"></line>
