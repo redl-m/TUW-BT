@@ -55,7 +55,7 @@ async def process_queue():
                 # NEW: Re-evaluate all existing candidates against the new job weights
                 for cand_id, cand in active_candidates.items():
                     # Only re-evaluate if CV extraction is already complete
-                    if cand.features and hasattr(cand.features, 'model_dump'):
+                    if cand.rf_score > 0.0:
                         scores = await asyncio.to_thread(scorer.evaluate_candidate, cand.features, current_job_weights)
 
                         # Update state
