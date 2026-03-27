@@ -260,8 +260,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   uploadNewJob(file: File) {
     this.apiService.uploadJob(file).subscribe({
       next: () => {
-        console.log('New job uploaded. Existing candidates will be re-evaluated shortly.');
-        // Optional: You could toggle a "recalculating" flag in your store here to show a spinner
+        this.initialWeightsLoaded = false; // unlock weights listener for new slider weights
       },
       error: (err) => console.error('Job upload failed:', err)
     });

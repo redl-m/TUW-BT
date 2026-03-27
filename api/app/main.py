@@ -163,6 +163,9 @@ async def startup_event():
 
 @app.post("/api/upload/job")
 async def upload_job(file: UploadFile = File(...)):
+    global current_job_weights
+    current_job_weights.clear()
+
     job_id = str(uuid.uuid4())
     file_extension = os.path.splitext(file.filename)[1].lower()
     file_path = f"../data/raw_jobs/{job_id}{file_extension}"
