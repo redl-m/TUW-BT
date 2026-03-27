@@ -317,6 +317,7 @@
     .candidate-name {
       margin-right: 0.5rem;
       font-weight: 500;
+      transition: opacity 0.2s;
     }
 
     .btn-delete-chip {
@@ -332,10 +333,36 @@
       cursor: pointer;
       transition: all 0.2s ease;
 
-      &:hover {
+      &:hover:not(:disabled) {
         background-color: #fee2e2;
         color: #ef4444;
       }
+
+      &:disabled {
+        cursor: not-allowed;
+      }
     }
+
+    &.shimmer {
+      background: #e2e8f0 linear-gradient(
+        90deg,
+        #e2e8f0 0px,
+        #ffffff 40px,
+        #e2e8f0 80px
+      );
+      background-size: 600px;
+      animation: shimmer 1.5s infinite linear;
+      border-color: transparent;
+      pointer-events: none;
+
+      .candidate-name, .btn-delete-chip {
+        opacity: 0;
+      }
+    }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -300px 0; }
+    100% { background-position: 300px 0; }
   }
 }
