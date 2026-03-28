@@ -56,16 +56,21 @@ import {toObservable} from '@angular/core/rxjs-interop';
                 <input type="file" #jobInput hidden accept=".pdf,.doc,.docx,.txt" (change)="onFileSelected($event, 'job')">
                 <div class="icon-wrapper blue">📄</div>
 
-                <ng-container *ngIf="!jobFile">
+                <ng-container *ngIf="jobUiState === 'neutral'">
                   <h4>Job Listing</h4>
                   <p>Drag & drop new job description<br>or click to browse</p>
                   <span class="file-types">PDF, DOC, DOCX, TXT</span>
                 </ng-container>
 
-                <ng-container *ngIf="jobFile">
-                  <h4 class="success-text">Job Description Ready</h4>
-                  <p class="font-semibold">{{ jobFile.name }}</p>
-                  <span class="file-types">Processing update...</span>
+                <ng-container *ngIf="jobUiState === 'processing'">
+                  <h4 class="text-blue-500">Processing Job...</h4>
+                  <p class="font-semibold">{{ jobFile?.name }}</p>
+                  <span class="file-types">Extracting baseline weights...</span>
+                </ng-container>
+
+                <ng-container *ngIf="jobUiState === 'success'">
+                  <h4 class="success-text">Job Description Processed</h4>
+                  <p class="font-semibold text-green-600">Successfully updated!</p>
                 </ng-container>
               </div>
 
@@ -79,15 +84,27 @@ import {toObservable} from '@angular/core/rxjs-interop';
                 <input type="file" #cvInput hidden multiple accept=".pdf,.doc,.docx" (change)="onFileSelected($event, 'cv')">
                 <div class="icon-wrapper purple">👥</div>
 
-                <ng-container *ngIf="cvFiles.length === 0">
+                <ng-container *ngIf="cvUiState === 'neutral'">
                   <h4>Candidate CVs</h4>
                   <p>Drag & drop additional resumes<br>to add to evaluation</p>
                   <span class="file-types">Multiple files supported</span>
                 </ng-container>
 
-                <ng-container *ngIf="cvFiles.length > 0">
-                  <h4 class="success-text">Uploaded {{ cvFiles.length }} Resumes</h4>
-                  <p class="font-semibold text-sm">Processing candidates...</p>
+                <ng-container *ngIf="cvUiState === 'processing'">
+                  <h4 class="text-purple-500">Uploading Candidates...</h4>
+                  <span class="file-types">Sending files to backend...</span>
+                </ng-container>
+
+                <ng-container *ngIf="cvUiState === 'success'">
+                  <h4 class="success-text" *ngIf="cvUploadStats?.accepted; else allRejected">Upload Complete</h4>
+                  <ng-template #allRejected>
+                    <h4 class="text-orange-500">Upload Ignored</h4>
+                  </ng-template>
+
+                  <p class="font-semibold text-sm">
+                    <span *ngIf="cvUploadStats?.accepted" class="text-green-600">{{ cvUploadStats?.accepted }} queued. </span>
+                    <span *ngIf="cvUploadStats?.rejected" class="text-orange-500">{{ cvUploadStats?.rejected }} duplicates skipped.</span>
+                  </p>
                 </ng-container>
               </div>
             </div>
@@ -157,21 +174,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isDraggingJob = false;
   isDraggingCv = false;
 
+  // UI Display States
+  jobUiState: 'neutral' | 'processing' | 'success' = 'neutral';
+  cvUiState: 'neutral' | 'processing' | 'success' = 'neutral';
+  cvUploadStats: { accepted: number; rejected: number } | null = null;
+
+  // Timeout references to prevent memory leaks if closed early
+  private jobSuccessTimeout: any;
+  private cvSuccessTimeout: any;
+
   /**
    * Initializes the dashboard by setting up WebSocket listeners and subscribing to the job weights Signal.
    */
   ngOnInit() {
-    // WebSocket Listener
     this.apiService.connectToCandidateUpdates((data) => {
       this.store.setCandidates(data.candidates);
 
-      // Anti-Snapback Lock: Only accept incoming weights if we haven't locked yet
       if (!this.initialWeightsLoaded) {
         this.store.setJobWeights(data.job_weights);
 
-        // Lock the frontend once the backend signals the LLM has finished the job
         if (data.is_job_processed) {
           this.initialWeightsLoaded = true;
+
+          // Switch to success, then reset to neutral after 3 seconds
+          if (this.jobUiState === 'processing') {
+            this.jobUiState = 'success';
+            this.jobSuccessTimeout = setTimeout(() => this.resetJobUi(), 3000);
+          }
         }
       }
     });
@@ -195,6 +224,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   toggleUploadBox() {
     this.showUploadBox = !this.showUploadBox;
+    // Auto-reset the UI to neutral if the box is closed while looking at a success message
+    if (!this.showUploadBox) {
+      if (this.jobUiState === 'success') this.resetJobUi();
+      if (this.cvUiState === 'success') this.resetCvUi();
+    }
+  }
+
+  resetJobUi() {
+    this.jobUiState = 'neutral';
+    this.jobFile = null;
+    clearTimeout(this.jobSuccessTimeout);
+  }
+
+  resetCvUi() {
+    this.cvUiState = 'neutral';
+    this.cvUploadStats = null;
+    clearTimeout(this.cvSuccessTimeout);
   }
 
   /**
@@ -292,11 +338,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return !isDuplicateName; // Keep only if it passes both checks
     });
 
+    // UI status update
+    const rejectedCount = files.length - newUniqueFiles.length;
+    this.cvUploadStats = { accepted: newUniqueFiles.length, rejected: rejectedCount };
+
     // Abort if all uploaded files were duplicates
     if (newUniqueFiles.length === 0) {
-      console.log('Upload ignored: All selected candidates are already in the list.');
+      this.cvUiState = 'success';
+      this.cvSuccessTimeout = setTimeout(() => this.resetCvUi(), 5000);
       return;
     }
+
+    // UI status update
+    this.cvUiState = 'processing';
 
     // Update the local file tracking array with the unique files
     this.cvFiles = [...this.cvFiles, ...newUniqueFiles];
@@ -307,17 +361,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     // Send only the unique files to the backend
     this.apiService.uploadCvs(newUniqueFiles).subscribe({
-      next: () => console.log(`Queued ${newUniqueFiles.length} new candidates`),
-      error: (err) => console.error('Upload failed:', err)
+      next: () => {
+        this.cvUiState = 'success';
+        this.cvSuccessTimeout = setTimeout(() => this.resetCvUi(), 5000);
+      },
+      error: (err) => {
+        console.error('Upload failed:', err);
+        this.resetCvUi();
+      }
     });
   }
 
   uploadNewJob(file: File) {
+    this.jobUiState = 'processing'; // Switch UI to Processing
     this.apiService.uploadJob(file).subscribe({
       next: () => {
-        this.initialWeightsLoaded = false; // unlock weights listener for new slider weights
+        this.initialWeightsLoaded = false;
       },
-      error: (err) => console.error('Job upload failed:', err)
+      error: (err) => {
+        console.error('Job upload failed:', err);
+        this.resetJobUi();
+      }
     });
   }
 
