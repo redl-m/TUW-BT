@@ -16,6 +16,7 @@ export interface CandidateFeatures {
 export interface Candidate {
   id: string;
   name: string;
+  original_filename?: string;
   features: CandidateFeatures;
   rf_score: number | null;
   user_score: number | null;
