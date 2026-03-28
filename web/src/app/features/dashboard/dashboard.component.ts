@@ -69,8 +69,15 @@ import {toObservable} from '@angular/core/rxjs-interop';
                 </ng-container>
 
                 <ng-container *ngIf="jobUiState === 'success'">
-                  <h4 class="success-text">Job Description Processed</h4>
-                  <p class="font-semibold text-green-600">Successfully updated!</p>
+                  <h4 class="success-text" *ngIf="!jobUploadStats?.rejected; else jobRejectedHeader">Job Description Processed</h4>
+                  <ng-template #jobRejectedHeader>
+                    <h4 class="text-orange-500">Upload Ignored</h4>
+                  </ng-template>
+
+                  <p class="font-semibold text-sm">
+                    <span *ngIf="!jobUploadStats?.rejected" class="text-green-600">Successfully updated!</span>
+                    <span *ngIf="jobUploadStats?.rejected" class="text-orange-500">This job description is already active.</span>
+                  </p>
                 </ng-container>
               </div>
 
@@ -178,6 +185,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   jobUiState: 'neutral' | 'processing' | 'success' = 'neutral';
   cvUiState: 'neutral' | 'processing' | 'success' = 'neutral';
   cvUploadStats: { accepted: number; rejected: number } | null = null;
+  jobUploadStats: { rejected: boolean } | null = null;
 
   // Timeout references to prevent memory leaks if closed early
   private jobSuccessTimeout: any;
@@ -234,6 +242,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   resetJobUi() {
     this.jobUiState = 'neutral';
     this.jobFile = null;
+    this.jobUploadStats = null;
     clearTimeout(this.jobSuccessTimeout);
   }
 
@@ -373,14 +382,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   uploadNewJob(file: File) {
-    this.jobUiState = 'processing'; // Switch UI to Processing
+    this.jobUploadStats = { rejected: false };
+    this.jobUiState = 'processing';
+
     this.apiService.uploadJob(file).subscribe({
       next: () => {
+        // Unlock the frontend to listen for new job weights
         this.initialWeightsLoaded = false;
       },
       error: (err) => {
-        console.error('Job upload failed:', err);
-        this.resetJobUi();
+        // Catch the HTTP 409 Conflict from the backend
+        if (err.status === 409) {
+          this.jobUploadStats = { rejected: true };
+          this.jobUiState = 'success';
+          this.jobSuccessTimeout = setTimeout(() => this.resetJobUi(), 4000);
+        } else {
+          console.error('Job upload failed:', err);
+          this.resetJobUi();
+        }
       }
     });
   }
