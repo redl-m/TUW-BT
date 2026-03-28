@@ -197,6 +197,7 @@ async def upload_cvs(files: List[UploadFile] = File(...)):
         active_candidates[cand_id] = Candidate(
             id=cand_id,
             name=display_name,
+            original_filename=file.filename,
             features=CandidateFeatures(),
             rf_score=0.0,
             user_score=0.0,
