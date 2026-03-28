@@ -122,4 +122,13 @@ export class ApiService {
       this.ws?.close();
     };
   }
+
+  /**
+   * Delete a candidate from the system.
+   * @param candidateId The ID of the candidate to delete.
+   * @returns An observable that emits the response from the server.
+   */
+  deleteCandidate(candidateId: string): Observable<any> {
+    return this.http.delete(`/api/candidates/${candidateId}`);
+  }
 }

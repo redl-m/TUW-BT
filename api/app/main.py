@@ -1,5 +1,5 @@
 import torch
-from fastapi import FastAPI, UploadFile, File, WebSocket, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, WebSocket, BackgroundTasks, HTTPException
 from typing import List, Dict
 import asyncio
 import uuid
@@ -25,6 +25,7 @@ os.makedirs("../data/raw_jobs", exist_ok=True)
 candidate_queue = asyncio.PriorityQueue()
 active_candidates: Dict[str, Candidate] = {}
 current_job_weights: Dict[str, float] = {}
+current_job_filename: str = ""
 
 # Central LLM Manager
 llm_manager = LLMManager()
@@ -51,37 +52,74 @@ async def process_queue():
                 # Offload heavy LLM extraction to a background thread
                 current_job_weights = await asyncio.to_thread(job_parser.extract_baseline_weights, job_text)
                 print(f"✅ Job Weights Processed: {current_job_weights}")
+
+                # Iterate over a copy of the dictionary to prevent crashes due to size changes
+                for cand_id in list(active_candidates.keys()):
+                    # Skip if the candidate was deleted during iteration
+                    if cand_id not in active_candidates:
+                        continue
+
+                    cand = active_candidates[cand_id]
+
+                    # Only re-evaluate if CV extraction is already complete
+                    if cand.features and hasattr(cand.features, 'model_dump'):
+                        scores = await asyncio.to_thread(scorer.evaluate_candidate, cand.features, current_job_weights)
+
+                        # Re-verify candidate still exists after awaiting the thread
+                        if cand_id in active_candidates:
+                            active_candidates[cand_id].rf_score = float(scores["rf_score"])
+                            active_candidates[cand_id].user_score = float(scores["user_score"])
+                            active_candidates[cand_id].risk_flag = bool(scores["risk_flag"])
+                            active_candidates[cand_id].shap_values = {k: float(v) for k, v in
+                                                                      scores.get("shap_values", {}).items()}
+
+                            # Reset the narrative so it generates a new one based on the new job
+                            active_candidates[cand_id].executive_summary = "Processing AI narrative..."
+                            active_candidates[cand_id].interview_questions = []
+
+                            # Queue up the candidate for XAI regeneration
+                            await candidate_queue.put((2, "GENERATE_XAI", cand_id))
+
             except Exception as e:
                 print(f"❌ Error processing job: {e}")
 
         elif task_type == "EXTRACT_CV":
-
             candidate_id, file_path = queue_item[2], queue_item[3]
+
+            # Check if candidate was deleted before processing
+            if candidate_id not in active_candidates:
+                candidate_queue.task_done()
+                continue
 
             try:
                 raw_text = await DocumentExtractor.extract_text_from_path(file_path)
-                # Unpack tuple extracted by parser
                 candidate_name, features = await asyncio.to_thread(cv_parser.parse_cv, raw_text)
 
                 while not current_job_weights:
                     await asyncio.sleep(0.5)
 
+                # Check again if candidate was deleted while waiting for job weights
+                if candidate_id not in active_candidates:
+                    candidate_queue.task_done()
+                    continue
+
                 scores = await asyncio.to_thread(scorer.evaluate_candidate, features, current_job_weights)
 
-                # Update state
-                active_candidates[candidate_id].name = candidate_name
-                active_candidates[candidate_id].features = features
-                active_candidates[candidate_id].rf_score = float(scores["rf_score"])
-                active_candidates[candidate_id].user_score = float(scores["user_score"])
-                active_candidates[candidate_id].risk_flag = bool(scores["risk_flag"])
+                # Check again before updating the dictionary
+                if candidate_id in active_candidates:
+                    active_candidates[candidate_id].name = candidate_name
+                    active_candidates[candidate_id].features = features
+                    active_candidates[candidate_id].rf_score = float(scores["rf_score"])
+                    active_candidates[candidate_id].user_score = float(scores["user_score"])
+                    active_candidates[candidate_id].risk_flag = bool(scores["risk_flag"])
 
-                if scores.get("shap_values"):
-                    active_candidates[candidate_id].shap_values = {k: float(v) for k, v in
-                                                                   scores["shap_values"].items()}
-                else:
-                    active_candidates[candidate_id].shap_values = {}
+                    if scores.get("shap_values"):
+                        active_candidates[candidate_id].shap_values = {k: float(v) for k, v in
+                                                                       scores["shap_values"].items()}
+                    else:
+                        active_candidates[candidate_id].shap_values = {}
 
-                await candidate_queue.put((2, "GENERATE_XAI", candidate_id))
+                    await candidate_queue.put((2, "GENERATE_XAI", candidate_id))
 
             except Exception as e:
                 print(f"❌ Error extracting CV for {candidate_id}")
@@ -89,6 +127,12 @@ async def process_queue():
 
         elif task_type == "GENERATE_XAI":
             candidate_id = queue_item[2]
+
+            # Liveness check to prevent KeyError
+            if candidate_id not in active_candidates:
+                candidate_queue.task_done()
+                continue
+
             candidate = active_candidates[candidate_id]
 
             # Idempotency check
@@ -101,10 +145,13 @@ async def process_queue():
                 summary, questions = await asyncio.to_thread(interviewer.generate_narrative, candidate,
                                                              current_job_weights)
 
-                active_candidates[candidate_id].executive_summary = summary
-                active_candidates[candidate_id].interview_questions = questions
+                # Final check before updating
+                if candidate_id in active_candidates:
+                    active_candidates[candidate_id].executive_summary = summary
+                    active_candidates[candidate_id].interview_questions = questions
             except Exception as e:
-                active_candidates[candidate_id].executive_summary = "Failed to generate narrative."
+                if candidate_id in active_candidates:
+                    active_candidates[candidate_id].executive_summary = "Failed to generate narrative."
                 traceback.print_exc()
 
         candidate_queue.task_done()
@@ -117,6 +164,17 @@ async def startup_event():
 
 @app.post("/api/upload/job")
 async def upload_job(file: UploadFile = File(...)):
+    global current_job_weights
+    global current_job_filename
+
+    # Duplicate Check
+    if current_job_filename.lower() == file.filename.lower():
+        # Throw an HTTP 409 Conflict if it matches the currently active job
+        raise HTTPException(status_code=409, detail="Job description already active.")
+
+    current_job_filename = file.filename # update active filename
+    current_job_weights.clear() # clear existing weights
+
     job_id = str(uuid.uuid4())
     file_extension = os.path.splitext(file.filename)[1].lower()
     file_path = f"../data/raw_jobs/{job_id}{file_extension}"
@@ -148,6 +206,7 @@ async def upload_cvs(files: List[UploadFile] = File(...)):
         active_candidates[cand_id] = Candidate(
             id=cand_id,
             name=display_name,
+            original_filename=file.filename,
             features=CandidateFeatures(),
             rf_score=0.0,
             user_score=0.0,
@@ -257,3 +316,11 @@ async def get_llm_stats():
         "progress_str": getattr(llm_manager, 'loading_progress', ''),
         "local_status": getattr(llm_manager, 'local_status', 'unloaded')
     }
+
+@app.delete("/api/candidates/{candidate_id}")
+async def delete_candidate(candidate_id: str):
+    """Removes a candidate from the active tracking dictionary."""
+    if candidate_id in active_candidates:
+        del active_candidates[candidate_id]
+        return {"status": "success", "message": f"Candidate {candidate_id} deleted"}
+    return {"status": "not_found", "message": "Candidate not found"}

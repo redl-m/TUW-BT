@@ -72,7 +72,10 @@ export const CandidateStore = signalStore(
     },
 
     setCandidates(candidates: Candidate[]) {
-      patchState(store, { candidates });
+      patchState(store, (state) => ({
+        // Re-apply current states to incoming backend data
+        candidates: recalculateAndSort(candidates, state.jobWeights)
+      }));
     },
 
     setJobWeights(jobWeights: Record<string, number>) {
@@ -113,7 +116,16 @@ export const CandidateStore = signalStore(
       socket.onerror = (error) => {
         console.error('WebSocket Error:', error);
       };
-    }
+    },
 
+    /**
+     * Remove a candidate from the store.
+     * @param candidateId The ID of the candidate to delete.
+     */
+    removeCandidate(candidateId: string) {
+      patchState(store, (state) => ({
+        candidates: state.candidates.filter(c => c.id !== candidateId)
+      }));
+    }
   }))
 );

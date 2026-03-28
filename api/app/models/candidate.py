@@ -26,6 +26,7 @@ class CandidateFeatures(BaseModel):
 class Candidate(BaseModel):
     id: str
     name: str = "Unknown Candidate"
+    original_filename: str = ""
     features: CandidateFeatures
 
     # Scoring Metrics
