@@ -405,7 +405,7 @@ export class UploadComponent implements OnInit, OnDestroy {
 
       if (!isDuplicate) {
         uniqueNewFiles.push(file);
-        acceptedFiles.push(file); // Add to accepted so we catch duplicates WITHIN the same batch
+        acceptedFiles.push(file);
       } else {
         console.log(`Initial upload ignored duplicate: ${file.name}`);
       }
