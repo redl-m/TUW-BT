@@ -242,24 +242,72 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * @param type 'job' for job description, 'cv' for candidate resumes
    * @private
    */
-  private processFiles(files: FileList, type: 'job' | 'cv') {
-    if (type === 'job') {
-      this.jobFile = files[0];
-      this.uploadNewJob(this.jobFile);
-    } else {
-      const fileArray = Array.from(files);
-      this.cvFiles = [...this.cvFiles, ...fileArray];
-      this.uploadAdditionalCvs(fileArray);
+    private processFiles(files: FileList, type: 'job' | 'cv') {
+      if (type === 'job') {
+        this.jobFile = files[0];
+        this.uploadNewJob(this.jobFile);
+      } else {
+        const fileArray = Array.from(files);
+        // DO NOT append to this.cvFiles here! Let uploadAdditionalCvs handle it.
+        this.uploadAdditionalCvs(fileArray);
+      }
     }
-  }
 
   uploadAdditionalCvs(files: File[]) {
+    // Get lowercase active names
+    const activeNames = this.store.candidates().map(c => c.name.toLowerCase());
+
+    // Get original filenames from the store
+    const storeFilenames = this.store.candidates()
+      .map(c => c.original_filename?.toLowerCase())
+      .filter(name => name); // filter out undefined
+
+    // Get filenames uploaded  in this current session
+    const sessionFilenames = this.cvFiles.map(f => f.name.toLowerCase());
+
+    // Combine them into an absolute master list of filenames
+    const allKnownFilenames = [...storeFilenames, ...sessionFilenames];
+
+    // Filter out any files that match an existing candidate's name or a previously uploaded file
+    const newUniqueFiles = files.filter(file => {
+      const exactFileName = file.name.toLowerCase();
+
+      // Exact filename match in store and local session
+      if (allKnownFilenames.includes(exactFileName)) {
+        return false; // Reject: This file is already uploaded
+      }
+
+      // Word Overlap Match
+      const baseName = file.name.replace(/\.[^/.]+$/, "");
+      const normalizedFileName = baseName.replace(/[_-]/g, ' ').toLowerCase();
+      const fileWords = normalizedFileName.split(' ');
+
+      const isDuplicateName = activeNames.some(activeName => {
+        const activeWords = activeName.split(' ');
+        if (activeWords.length === 0 || activeName.trim() === '') return false;
+
+        return activeWords.every(word => fileWords.includes(word));
+      });
+
+      return !isDuplicateName; // Keep only if it passes both checks
+    });
+
+    // Abort if all uploaded files were duplicates
+    if (newUniqueFiles.length === 0) {
+      console.log('Upload ignored: All selected candidates are already in the list.');
+      return;
+    }
+
+    // Update the local file tracking array with the unique files
+    this.cvFiles = [...this.cvFiles, ...newUniqueFiles];
+
     // Add to the existing expected count to show the correct number of skeleton loaders
-    const newTotalCount = this.store.expectedCandidateCount() + files.length;
+    const newTotalCount = this.store.expectedCandidateCount() + newUniqueFiles.length;
     this.store.setExpectedCandidateCount(newTotalCount);
 
-    this.apiService.uploadCvs(files).subscribe({
-      next: () => console.log(`Queued ${files.length} new candidates`),
+    // Send only the unique files to the backend
+    this.apiService.uploadCvs(newUniqueFiles).subscribe({
+      next: () => console.log(`Queued ${newUniqueFiles.length} new candidates`),
       error: (err) => console.error('Upload failed:', err)
     });
   }
@@ -278,6 +326,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * @param candidateId The ID of the candidate to delete.
    */
   deleteCandidate(candidateId: string) {
+    // Find the candidate first to determine the file to be removed
+    const candidateToDelete = this.store.candidates().find(c => c.id === candidateId);
+
     this.apiService.deleteCandidate(candidateId).subscribe({
       next: () => {
         // Instantly remove the candidate from the local store so the UI updates
@@ -287,6 +338,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
         const currentExpectedCount = this.store.expectedCandidateCount();
         if (currentExpectedCount > 0) {
           this.store.setExpectedCandidateCount(currentExpectedCount - 1);
+        }
+
+        // Remove the deleted candidate's file from the local array
+        if (candidateToDelete) {
+          const normalizedDeleteName = candidateToDelete.name.toLowerCase();
+
+          this.cvFiles = this.cvFiles.filter(file => {
+            const baseName = file.name.replace(/\.[^/.]+$/, "");
+            const normalizedFileName = baseName.replace(/[_-]/g, ' ').toLowerCase();
+            const fileWords = normalizedFileName.split(' ');
+            const deleteWords = normalizedDeleteName.split(' ');
+
+            // This is the file to be filtered out if there is a match
+            const isMatch = deleteWords.every(word => fileWords.includes(word));
+            return !isMatch; // Keep the file only if it doesn't match the deleted candidate
+          });
         }
       },
       error: (err) => console.error('Failed to delete candidate:', err)
