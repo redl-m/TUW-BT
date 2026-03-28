@@ -347,15 +347,71 @@ export class UploadComponent implements OnInit, OnDestroy {
       this.jobFile = files[0];
       this.apiService.uploadJob(this.jobFile).subscribe();
     } else {
-      this.cvFiles = [...this.cvFiles, ...Array.from(files)];
-      this.apiService.uploadCvs(this.cvFiles).subscribe();
-      this.store.setExpectedCandidateCount(this.cvFiles.length);
+      const rawIncomingFiles = Array.from(files);
+
+      // Check for duplicate file uploads heuristically
+      const uniqueIncomingFiles = this.getUniqueNewCVs(rawIncomingFiles, this.cvFiles);
+
+      if (uniqueIncomingFiles.length > 0) {
+        // Only send the unique files to the API
+        this.cvFiles = [...this.cvFiles, ...uniqueIncomingFiles];
+        this.apiService.uploadCvs(uniqueIncomingFiles).subscribe();
+        this.store.setExpectedCandidateCount(this.cvFiles.length);
+      }
     }
 
     // Check if both job and CV files are uploaded
     if (this.jobFile && this.cvFiles.length > 0) {
       this.router.navigate(['/dashboard']);
     }
+  }
+
+  /**
+   * Filters out duplicate candidate files based on filename heuristics, keeping the newest file.
+   */
+  private getUniqueNewCVs(newFiles: File[], existingFiles: File[]): File[] {
+    // Words to ignore when comparing filenames
+    const stopwords = ['cv', 'resume', 'lebenslauf', 'application', 'bewerbung', 'english', 'englisch', 'german', 'deutsch'];
+
+    const getCleanWords = (filename: string) => {
+      const baseName = filename.replace(/\.[^/.]+$/, "").toLowerCase();
+      // Replace punctuation/numbers with spaces, split, filter out stopwords and tiny words
+      return baseName.replace(/[^a-zäöüß]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 1 && !stopwords.includes(w));
+    };
+
+    // Sort incoming files by newest first
+    const sortedNewFiles = [...newFiles].sort((a, b) => b.lastModified - a.lastModified);
+    const uniqueNewFiles: File[] = [];
+
+    // Memory of all accepted files
+    const acceptedFiles = [...existingFiles];
+
+    for (const file of sortedNewFiles) {
+      const fileWords = getCleanWords(file.name);
+
+      const isDuplicate = acceptedFiles.some(acceptedFile => {
+        const acceptedWords = getCleanWords(acceptedFile.name);
+        const intersection = fileWords.filter(w => acceptedWords.includes(w));
+
+        // Duplicates must share at least 2 core words
+        if (intersection.length >= 2) return true;
+
+        // One filename is a complete subset of the other
+        if (fileWords.length > 0 && intersection.length === fileWords.length) return true;
+        return acceptedWords.length > 0 && intersection.length === acceptedWords.length;
+      });
+
+      if (!isDuplicate) {
+        uniqueNewFiles.push(file);
+        acceptedFiles.push(file); // Add to accepted so we catch duplicates WITHIN the same batch
+      } else {
+        console.log(`Initial upload ignored duplicate: ${file.name}`);
+      }
+    }
+
+    return uniqueNewFiles;
   }
 
   startStatsPolling() {
