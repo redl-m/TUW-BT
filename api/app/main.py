@@ -95,31 +95,37 @@ async def process_queue():
                 raw_text = await DocumentExtractor.extract_text_from_path(file_path)
                 candidate_name, features = await asyncio.to_thread(cv_parser.parse_cv, raw_text)
 
-                while not current_job_weights:
-                    await asyncio.sleep(0.5)
-
-                # Check again if candidate was deleted while waiting for job weights
+                # Check again if candidate was deleted during extraction
                 if candidate_id not in active_candidates:
                     candidate_queue.task_done()
                     continue
 
-                scores = await asyncio.to_thread(scorer.evaluate_candidate, features, current_job_weights)
+                # Immediately save the extracted features so they aren't lost
+                active_candidates[candidate_id].name = candidate_name
+                active_candidates[candidate_id].features = features
 
-                # Check again before updating the dictionary
-                if candidate_id in active_candidates:
-                    active_candidates[candidate_id].name = candidate_name
-                    active_candidates[candidate_id].features = features
-                    active_candidates[candidate_id].rf_score = float(scores["rf_score"])
-                    active_candidates[candidate_id].user_score = float(scores["user_score"])
-                    active_candidates[candidate_id].risk_flag = bool(scores["risk_flag"])
+                # Hold the candidate if the job hasn't been uploaded yet
+                if not current_job_weights:
+                    print(f"⏸️ Holding candidate {candidate_name} until Job Description is provided.")
+                else:
+                    # Job weights exist, proceed to score immediately
+                    scores = await asyncio.to_thread(scorer.evaluate_candidate, features, current_job_weights)
 
-                    if scores.get("shap_values"):
-                        active_candidates[candidate_id].shap_values = {k: float(v) for k, v in
-                                                                       scores["shap_values"].items()}
-                    else:
-                        active_candidates[candidate_id].shap_values = {}
+                    # Check one last time before updating the dictionary
+                    if candidate_id in active_candidates:
+                        active_candidates[candidate_id].rf_score = float(scores["rf_score"])
+                        active_candidates[candidate_id].user_score = float(scores["user_score"])
 
-                    await candidate_queue.put((2, "GENERATE_XAI", candidate_id))
+                        active_candidates[candidate_id].risk_flag = bool(scores["risk_flag"])
+
+                        if scores.get("shap_values"):
+
+                            active_candidates[candidate_id].shap_values = {k: float(v) for k, v in
+                                                                           scores["shap_values"].items()}
+                        else:
+                            active_candidates[candidate_id].shap_values = {}
+
+                        await candidate_queue.put((2, "GENERATE_XAI", candidate_id))
 
             except Exception as e:
                 print(f"❌ Error extracting CV for {candidate_id}")
