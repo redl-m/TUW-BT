@@ -1,7 +1,9 @@
-import {Component, inject, Input} from '@angular/core';
+import { Component, inject, Input, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CandidateStore } from '../../../../core/state/candidate.store';
 import { VisualSliderComponent } from '../../../../shared/ui/visual-slider/visual-slider.component';
+import { ApiService } from '../../../../core/services/api.service';
+import { Subject, debounceTime, takeUntil } from 'rxjs';
 
 @Component({
   selector: 'app-weighting-sidebar',
@@ -49,10 +51,32 @@ import { VisualSliderComponent } from '../../../../shared/ui/visual-slider/visua
 /**
  * Component for displaying the weighting sidebar.
  */
-export class WeightingSidebarComponent {
+export class WeightingSidebarComponent implements OnInit, OnDestroy {
 
   @Input() disabled: boolean = false;
   store = inject(CandidateStore);
+  apiService = inject(ApiService);
+
+  private sliderSubject = new Subject<void>();
+  private destroy$ = new Subject<void>();
+
+  ngOnInit() {
+    // Listen to physical slider changes and debounce them by 800ms
+    this.sliderSubject.pipe(
+      debounceTime(800),
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.apiService.updateWeights(this.store.jobWeights()).subscribe({
+        next: () => console.log('✅ New weights posted to backend!'),
+        error: (err) => console.error('❌ Failed to update weights', err)
+      });
+    });
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
 
   // Display names
   private readonly featureDisplayNames: Record<string, string> = {
@@ -109,5 +133,6 @@ export class WeightingSidebarComponent {
 
   onSliderChange(feature: string, newValue: number) {
     this.store.updateWeight(feature, newValue);
+    this.sliderSubject.next();
   }
 }
