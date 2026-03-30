@@ -141,8 +141,10 @@ async def process_queue():
 
             candidate = active_candidates[candidate_id]
 
-            # Idempotency check
-            if candidate.executive_summary and candidate.executive_summary != "Processing AI narrative...":
+            # Allow both initial processing and recalculating states through the gate
+            valid_loading_states = ["Processing AI narrative...", "Recalculating AI narrative..."]
+
+            if candidate.executive_summary and candidate.executive_summary not in valid_loading_states:
                 candidate_queue.task_done()
                 continue
 
@@ -243,13 +245,21 @@ async def update_weights(data: dict):
         current_job_weights = data["weights"]
 
         # Instantly recalculate user_score for all candidates already processed
-        for cand in active_candidates.values():
+        for cand_id, cand in active_candidates.items():
             if cand.rf_score and cand.rf_score > 0:
                 try:
                     scores = scorer.evaluate_candidate(cand.features, current_job_weights)
                     cand.user_score = float(scores["user_score"])
+
+                    # Use a different phrase
+                    cand.executive_summary = "Recalculating AI narrative..."
+                    cand.interview_questions = []
+
+                    # Queue up the candidate for XAI regeneration
+                    await candidate_queue.put((2, "GENERATE_XAI", cand_id))
+
                 except Exception as e:
-                    print(f"Failed to recalculate score: {e}")
+                    print(f"Failed to recalculate score and queue XAI: {e}")
 
     return {"status": "success"}
 
