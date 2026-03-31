@@ -21,7 +21,8 @@ import { Candidate } from '../../../../core/models/candidate.model';
         <app-candidate-tile
           *ngIf="candidate.executive_summary !== 'Processing AI narrative...'"
           [candidate]="candidate"
-          [rank]="i + 1">
+          [rank]="i + 1"
+          [autoExpand]="candidate.id === firstRiskCandidateId">
         </app-candidate-tile>
       </ng-container>
 
@@ -43,6 +44,8 @@ export class CandidateListComponent {
   @Input({ required: true }) isProcessing: boolean = false;
   @Input() expectedCount: number = 0;
 
+  private lockedRiskCandidateId: string | null = null;
+
   /**
    * Sorts the candidates by their baseline score in descending order.
    * @returns An array of sorted candidates.
@@ -55,6 +58,28 @@ export class CandidateListComponent {
       const scoreB = b.user_score || 0;
       return scoreB - scoreA;
     });
+  }
+
+  get firstRiskCandidateId(): string | null {
+    // We have already locked in a target: stick with it
+    if (this.lockedRiskCandidateId) {
+      return this.lockedRiskCandidateId;
+    }
+
+    // Otherwise: look for the first valid risk candidate in the current list
+    const firstRisk = this.sortedCandidates.find(c =>
+      c.risk_flag && c.executive_summary !== 'Processing AI narrative...'
+    );
+
+    // If present, set it as the target
+    if (firstRisk) {
+      setTimeout(() => {
+        this.lockedRiskCandidateId = firstRisk.id;
+      });
+      return firstRisk.id;
+    }
+
+    return null;
   }
 
   /**
