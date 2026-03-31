@@ -1,5 +1,4 @@
-import { Component, Input } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';import { CommonModule } from '@angular/common';
 import { CandidateDetailComponent } from '../../../candidate-detail/candidate-detail.component';
 import { Candidate } from '../../../../core/models/candidate.model';
 
@@ -9,6 +8,14 @@ import { Candidate } from '../../../../core/models/candidate.model';
   imports: [CommonModule, CandidateDetailComponent],
   styleUrls: ['./candidate-tile.component.scss'],
   template: `
+    <div *ngIf="candidate.risk_flag" class="floating-risk-badge" [class.auto-expand]="isAutoExpanding">
+      <span class="risk-icon leading-none">⚠️</span>
+      <div class="risk-text-container">
+        <span class="risk-title">Potential Risk</span>
+        <span class="risk-subtitle">Score deviation high</span>
+      </div>
+    </div>
+
     <div class="candidate-card-wrapper bg-white rounded-xl shadow-sm border border-gray-200 transition-all duration-300">
 
       <div class="candidate-card flex items-center justify-between p-6 gap-6">
@@ -47,14 +54,6 @@ import { Candidate } from '../../../../core/models/candidate.model';
         </div>
 
         <div class="action-section flex items-center gap-4 ml-auto">
-
-          <div *ngIf="candidate.risk_flag" class="risk-badge flex items-start gap-3 bg-[#fffbeb] border border-[#fde68a] rounded-lg p-3">
-            <span class="text-xl leading-none">⚠️</span>
-            <div class="flex flex-col">
-              <span class="font-semibold text-[#b45309] text-sm leading-tight">Potential Risk</span>
-            </div>
-          </div>
-
           <button
             class="view-btn bg-[#2e1065] text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-[#1e1b4b] transition-colors flex items-center gap-2 whitespace-nowrap"
             style="font-family: inherit;"
@@ -81,8 +80,31 @@ import { Candidate } from '../../../../core/models/candidate.model';
 export class CandidateTileComponent {
   @Input({ required: true }) candidate!: Candidate;
   @Input() rank: number = 1;
+  @Input() autoExpand: boolean = false;
 
   isExpanded: boolean = false;
+  isAutoExpanding: boolean = false;
+
+  ngOnInit() {
+    if (this.autoExpand) {
+      this.playAutoExpandAnimation();
+    }
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['autoExpand'] && !changes['autoExpand'].isFirstChange() && changes['autoExpand'].currentValue === true) {
+      this.playAutoExpandAnimation();
+    }
+  }
+
+  private playAutoExpandAnimation() {
+    setTimeout(() => {
+      this.isAutoExpanding = true;
+      setTimeout(() => {
+        this.isAutoExpanding = false;
+      }, 4000);
+    }, 100);
+  }
 
   /**
    * Format the candidate's name to capitalize the first letter of each word.
