@@ -1,6 +1,10 @@
 import os
 import gc
 import sys
+import time
+from typing import Any
+
+import openai
 import torch
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -110,25 +114,37 @@ class LLMManager:
             # Always restore normal console output!
             sys.stderr = interceptor.original_stderr
 
-    def generate(self, messages: list, max_tokens: int = 1024, temperature: float = 0.6, do_sample: bool = True) -> str:
+    def generate(self, messages: list, max_tokens: int = 1024, temperature: float = 0.6, do_sample: bool = True) -> str | None | Any:
         """Central text generation routing."""
         if self.settings.provider == "api":
-            try:
-                client = OpenAI(api_key=self.settings.api_key, base_url=self.settings.base_url)
+            client = OpenAI(api_key=self.settings.api_key, base_url=self.settings.base_url)
+            api_temp = temperature if do_sample else 0.0
 
-                # API expects a float temperature. Map deterministic requests (do_sample=False) to temp=0.0
-                api_temp = temperature if do_sample else 0.0
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = client.chat.completions.create(
+                        model=self.settings.model_name,
+                        messages=messages,
+                        temperature=api_temp,
+                        max_tokens=max_tokens
+                    )
+                    return response.choices[0].message.content
 
-                response = client.chat.completions.create(
-                    model=self.settings.model_name,
-                    messages=messages,
-                    temperature=api_temp,
-                    max_tokens=max_tokens
-                )
-                return response.choices[0].message.content
-            except Exception as e:
-                print(f"API Generation Error: {e}")
-                raise
+                except openai.BadRequestError as e:
+                    # Check for a connection error from Aqueduct
+                    if "Connection error" in str(e) and attempt < max_retries - 1:
+                        print(f"Transient API connection error. Retrying {attempt + 1}/{max_retries} in 2 seconds...")
+                        time.sleep(2)
+                        continue
+                    else:
+                        print(f"API Generation Error: {e}")
+                        raise
+                except Exception as e:
+                    print(f"API Generation Error: {e}")
+                    raise
+
+            raise RuntimeError("API generation failed after maximum retries.")
 
         else:
             # Fallback to local model
