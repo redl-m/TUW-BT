@@ -125,6 +125,7 @@ async def process_queue():
                         else:
                             active_candidates[candidate_id].shap_values = {}
 
+                        active_candidates[candidate_id].executive_summary = "Calculating AI narrative..."
                         await candidate_queue.put((2, "GENERATE_XAI", candidate_id))
 
             except Exception as e:
@@ -142,7 +143,11 @@ async def process_queue():
             candidate = active_candidates[candidate_id]
 
             # Allow both initial processing and recalculating states through the gate
-            valid_loading_states = ["Processing AI narrative...", "Recalculating AI narrative..."]
+            valid_loading_states = [
+                "Processing AI narrative...",
+                "Recalculating AI narrative...",
+                "Calculating AI narrative..."
+            ]
 
             if candidate.executive_summary and candidate.executive_summary not in valid_loading_states:
                 candidate_queue.task_done()
