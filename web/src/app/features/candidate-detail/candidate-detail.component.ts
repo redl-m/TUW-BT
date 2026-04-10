@@ -40,10 +40,18 @@ export class CandidateDetailComponent implements OnInit {
   apiService = inject(ApiService);
 
   ngOnInit() {
-    const candidateId = this.candidate.id; // get ID directly from input
+    const candidateId = this.candidate.id;
 
+    // Define all valid loading states
+    const loadingStates = [
+      "Processing AI narrative...",
+      "Recalculating AI narrative...",
+      "Calculating AI narrative..."
+    ];
+
+    // Check if the current summary matches any of the loading states
     if (this.candidate && (!this.candidate.executive_summary ||
-      this.candidate.executive_summary === "Processing AI narrative...")) {
+      loadingStates.includes(this.candidate.executive_summary))) {
       this.apiService.prioritizeCandidate(candidateId).subscribe();
     }
   }
