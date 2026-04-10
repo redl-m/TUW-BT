@@ -16,10 +16,10 @@ import { Candidate } from '../../../../core/models/candidate.model';
       </div>
 
       <ng-container *ngFor="let candidate of sortedCandidates; let i = index; trackBy: trackById">
-        <app-skeleton-loader *ngIf="candidate.executive_summary === 'Processing AI narrative...'"></app-skeleton-loader>
+        <app-skeleton-loader *ngIf="isInitialLoading(candidate)"></app-skeleton-loader>
 
         <app-candidate-tile
-          *ngIf="candidate.executive_summary !== 'Processing AI narrative...'"
+          *ngIf="!isInitialLoading(candidate)"
           [candidate]="candidate"
           [rank]="i + 1"
           [autoExpand]="candidate.id === firstRiskCandidateId">
@@ -47,6 +47,14 @@ export class CandidateListComponent {
   private lockedRiskCandidateId: string | null = null;
 
   /**
+   * Helper to determine if a candidate is in the very first upload phase.
+   * If they have an rf_score, they have already been extracted and should show a tile.
+   */
+  isInitialLoading(candidate: Candidate): boolean {
+    return candidate.executive_summary === 'Processing AI narrative...' && !candidate.rf_score;
+  }
+
+  /**
    * Sorts the candidates by their baseline score in descending order.
    * @returns An array of sorted candidates.
    */
@@ -61,17 +69,14 @@ export class CandidateListComponent {
   }
 
   get firstRiskCandidateId(): string | null {
-    // We have already locked in a target: stick with it
     if (this.lockedRiskCandidateId) {
       return this.lockedRiskCandidateId;
     }
 
-    // Otherwise: look for the first valid risk candidate in the current list
     const firstRisk = this.sortedCandidates.find(c =>
-      c.risk_flag && c.executive_summary !== 'Processing AI narrative...'
+      c.risk_flag && !this.isInitialLoading(c)
     );
 
-    // If present, set it as the target
     if (firstRisk) {
       setTimeout(() => {
         this.lockedRiskCandidateId = firstRisk.id;
