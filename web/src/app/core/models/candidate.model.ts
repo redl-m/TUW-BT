@@ -20,7 +20,7 @@ export interface Candidate {
   features: CandidateFeatures;
   rf_score: number | null;
   user_score: number | null;
-  risk_flag: boolean;
+  info_flag: boolean;
   shap_values: Record<string, number> | null;
   deviation_breakdown?: Record<string, number>;
   executive_summary: string;

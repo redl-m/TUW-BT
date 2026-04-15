@@ -22,7 +22,7 @@ import { Candidate } from '../../../../core/models/candidate.model';
           *ngIf="!isInitialLoading(candidate)"
           [candidate]="candidate"
           [rank]="i + 1"
-          [autoExpand]="candidate.id === firstRiskCandidateId">
+          [autoExpand]="candidate.id === firstInfoCandidateId">
         </app-candidate-tile>
       </ng-container>
 
@@ -44,7 +44,7 @@ export class CandidateListComponent {
   @Input({ required: true }) isProcessing: boolean = false;
   @Input() expectedCount: number = 0;
 
-  private lockedRiskCandidateId: string | null = null;
+  private lockedInfoCandidateId: string | null = null;
 
   /**
    * Helper to determine if a candidate is in the very first upload phase.
@@ -68,20 +68,20 @@ export class CandidateListComponent {
     });
   }
 
-  get firstRiskCandidateId(): string | null {
-    if (this.lockedRiskCandidateId) {
-      return this.lockedRiskCandidateId;
+  get firstInfoCandidateId(): string | null {
+    if (this.lockedInfoCandidateId) {
+      return this.lockedInfoCandidateId;
     }
 
-    const firstRisk = this.sortedCandidates.find(c =>
-      c.risk_flag && !this.isInitialLoading(c)
+    const firstInfo = this.sortedCandidates.find(c =>
+      c.info_flag && !this.isInitialLoading(c)
     );
 
-    if (firstRisk) {
+    if (firstInfo) {
       setTimeout(() => {
-        this.lockedRiskCandidateId = firstRisk.id;
+        this.lockedInfoCandidateId = firstInfo.id;
       });
-      return firstRisk.id;
+      return firstInfo.id;
     }
 
     return null;

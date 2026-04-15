@@ -9,7 +9,7 @@ import {CandidateStore} from '../../../../core/state/candidate.store';
   imports: [CommonModule, CandidateDetailComponent],
   styleUrls: ['./candidate-tile.component.scss'],
   template: `
-    <div *ngIf="candidate.risk_flag"
+    <div *ngIf="candidate.info_flag"
          class="floating-info-badge group"
          [class.auto-expand]="isAutoExpanding"
          (mouseenter)="onHoverDeviation(true)"

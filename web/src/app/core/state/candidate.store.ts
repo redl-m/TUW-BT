@@ -73,12 +73,12 @@ function recalculateAndSort(candidates: Candidate[], weights: Record<string, num
     finalUserScore = Math.max(0, Math.min(finalUserScore, 1.0));
 
     // Calculate information badge flag based on the newly calculated score
-    const riskFlag = finalUserScore > safeRfScore && (finalUserScore - safeRfScore) >= 0.20;
+    const infoFlag = finalUserScore > safeRfScore && (finalUserScore - safeRfScore) >= 0.20;
 
     return {
       ...candidate,
       user_score: finalUserScore,
-      risk_flag: riskFlag,
+      info_flag: infoFlag,
       deviation_breakdown: sorted_deviation_breakdown
     };
   });

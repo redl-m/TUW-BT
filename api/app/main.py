@@ -69,7 +69,7 @@ async def process_queue():
                         if cand_id in active_candidates:
                             active_candidates[cand_id].rf_score = float(scores["rf_score"])
                             active_candidates[cand_id].user_score = float(scores["user_score"])
-                            active_candidates[cand_id].risk_flag = bool(scores["risk_flag"])
+                            active_candidates[cand_id].info_flag = bool(scores["info_flag"])
                             active_candidates[cand_id].shap_values = {k: float(v) for k, v in
                                                                       scores.get("shap_values", {}).items()}
 
@@ -116,7 +116,7 @@ async def process_queue():
                         active_candidates[candidate_id].rf_score = float(scores["rf_score"])
                         active_candidates[candidate_id].user_score = float(scores["user_score"])
 
-                        active_candidates[candidate_id].risk_flag = bool(scores["risk_flag"])
+                        active_candidates[candidate_id].info_flag = bool(scores["info_flag"])
 
                         if scores.get("shap_values"):
 
@@ -223,7 +223,7 @@ async def upload_cvs(files: List[UploadFile] = File(...)):
             features=CandidateFeatures(),
             rf_score=0.0,
             user_score=0.0,
-            risk_flag=False,
+            info_flag=False,
             shap_values={},
             executive_summary="Processing AI narrative...",
             interview_questions=[]
