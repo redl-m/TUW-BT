@@ -3,6 +3,7 @@ import {Candidate} from '../models/candidate.model';
 
 interface CandidateState {
   candidates: Candidate[];
+  highlightedFeatures: string[];
   jobWeights: Record<string, number>;
   isProcessing: boolean;
   expectedCandidateCount: number;
@@ -10,17 +11,20 @@ interface CandidateState {
 
 const initialState: CandidateState = {
   candidates: [],
+  highlightedFeatures: [],
   jobWeights: {},
   isProcessing: false,
   expectedCandidateCount: 0,
 };
 
 /**
- * Recalculates the user score for each candidate based on SHAP modifications.
+ * Recalculates the user score and exact score deviations for each candidate based on SHAP modifications.
  * @param candidates The list of candidates to recalculate.
  * @param weights The current weights for each feature (1 to 5).
  */
 function recalculateAndSort(candidates: Candidate[], weights: Record<string, number>): Candidate[] {
+  // Define features that shouldn't factor into user-controlled deviations
+  const intrinsicFeatures = ['job_hopping'];
 
   const updated = candidates.map(candidate => {
     const safeRfScore = candidate.rf_score || 0;
@@ -28,30 +32,54 @@ function recalculateAndSort(candidates: Candidate[], weights: Record<string, num
 
     // Reverse-engineer the base value (Expected Value)
     let shapSum = 0;
-    // BaseValue = RF_Score - Sum(SHAP_Values
     Object.values(shapValues).forEach(val => {
       shapSum += val;
     });
+
     // Accumulate modified user score
     let finalUserScore = safeRfScore - shapSum;
 
+    // Track how much each feature contributes to the score deviation
+    const deviation_breakdown: Record<string, number> = {};
+
     Object.entries(shapValues).forEach(([featureName, shapVal]) => {
+      if (intrinsicFeatures.includes(featureName)) {
+        finalUserScore += shapVal;
+        return;
+      }
 
       const rawWeight = weights[featureName] !== undefined ? weights[featureName] : 3.0;
       const multiplier = (rawWeight - 1.0) / 4.0; // Multiplier mapping
       finalUserScore += (shapVal * multiplier);
+
+      // Calculate the exact deviation delta caused by this specific user weight
+      const delta = shapVal * (multiplier - 1.0);
+
+      // If the delta pushed the score up, record it
+      if (delta > 0) {
+        deviation_breakdown[featureName] = Number(delta.toFixed(4));
+      }
     });
+
+    // Sort the deviation breakdown descending so the highest impact features are first
+    const sorted_deviation_breakdown: Record<string, number> = {};
+    Object.entries(deviation_breakdown)
+      .sort(([, a], [, b]) => b - a)
+      .forEach(([key, value]) => {
+        sorted_deviation_breakdown[key] = value;
+      });
 
     // Ensure the final score strictly bounds between 0.0 and 1.0
     finalUserScore = Math.max(0, Math.min(finalUserScore, 1.0));
 
-    // Calculate risk flag
+    // Calculate information badge flag based on the newly calculated score
     const riskFlag = finalUserScore > safeRfScore && (finalUserScore - safeRfScore) >= 0.20;
 
     return {
       ...candidate,
       user_score: finalUserScore,
-      risk_flag: riskFlag
+      risk_flag: riskFlag,
+      deviation_breakdown: sorted_deviation_breakdown
     };
   });
 
@@ -84,6 +112,10 @@ export const CandidateStore = signalStore(
 
     setExpectedCandidateCount(count: number) {
       patchState(store, { expectedCandidateCount: count });
+    },
+
+    setHighlightedFeatures(features: string[]) {
+      patchState(store, { highlightedFeatures: features });
     },
 
     updateWeight(feature: string, weight: number) {
