@@ -54,7 +54,7 @@ class ScorerService:
 
         self.explainer = shap.TreeExplainer(self.model)
 
-        self.RISK_BOUNDARY_THRESHOLD = 0.20
+        self.INFO_BOUNDARY_THRESHOLD = 0.20
 
     def _prepare_feature_array(self, features: CandidateFeatures) -> DataFrame:
         """
@@ -122,9 +122,9 @@ class ScorerService:
         user_score = max(0.0, min(user_score_accumulator, 1.0))
 
         # Risk Flag Logic
-        risk_flag = False
-        if user_score > rf_score and (user_score - rf_score) >= self.RISK_BOUNDARY_THRESHOLD:
-            risk_flag = True
+        info_flag = False
+        if user_score > rf_score and (user_score - rf_score) >= self.INFO_BOUNDARY_THRESHOLD:
+            info_flag = True
 
         # Deviation breakdown for information badge
         deviation_breakdown = {}
@@ -146,7 +146,7 @@ class ScorerService:
         return {
             "rf_score": rf_score,
             "user_score": user_score,
-            "risk_flag": risk_flag,
+            "info_flag": info_flag,
             "shap_values": shap_dict,
             "deviation_breakdown": sorted_deviations
         }
