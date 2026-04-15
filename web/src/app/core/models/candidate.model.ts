@@ -22,6 +22,7 @@ export interface Candidate {
   user_score: number | null;
   risk_flag: boolean;
   shap_values: Record<string, number> | null;
+  deviation_breakdown?: Record<string, number>;
   executive_summary: string;
   interview_questions: string[];
 }
