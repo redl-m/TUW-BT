@@ -126,9 +126,27 @@ class ScorerService:
         if user_score > rf_score and (user_score - rf_score) >= self.RISK_BOUNDARY_THRESHOLD:
             risk_flag = True
 
+        # Deviation breakdown for information badge
+        deviation_breakdown = {}
+
+        for feature_name, shap_val in shap_dict.items():
+            if feature_name not in intrinsic_features:
+                raw_weight = user_weights.get(feature_name, 3.0)
+                multiplier = (raw_weight - 1.0) / 4.0
+
+                # Calculate exactly how much this specific feature pushed the score up
+                delta = shap_val * (multiplier - 1.0)
+
+                if delta > 0:
+                    deviation_breakdown[feature_name] = round(delta, 4)
+
+        # Sort features by the largest contribution to the deviation
+        sorted_deviations = dict(sorted(deviation_breakdown.items(), key=lambda item: item[1], reverse=True))
+
         return {
             "rf_score": rf_score,
             "user_score": user_score,
             "risk_flag": risk_flag,
-            "shap_values": shap_dict
+            "shap_values": shap_dict,
+            "deviation_breakdown": sorted_deviations
         }
