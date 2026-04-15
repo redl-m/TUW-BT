@@ -185,8 +185,8 @@ async def upload_job(file: UploadFile = File(...)):
         # Throw an HTTP 409 Conflict if it matches the currently active job
         raise HTTPException(status_code=409, detail="Job description already active.")
 
-    current_job_filename = file.filename # update active filename
-    current_job_weights.clear() # clear existing weights
+    current_job_filename = file.filename  # update active filename
+    current_job_weights.clear()  # clear existing weights
 
     job_id = str(uuid.uuid4())
     file_extension = os.path.splitext(file.filename)[1].lower()
@@ -337,6 +337,7 @@ async def get_llm_stats():
         "progress_str": getattr(llm_manager, 'loading_progress', ''),
         "local_status": getattr(llm_manager, 'local_status', 'unloaded')
     }
+
 
 @app.delete("/api/candidates/{candidate_id}")
 async def delete_candidate(candidate_id: str):
