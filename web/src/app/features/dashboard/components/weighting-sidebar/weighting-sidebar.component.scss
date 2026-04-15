@@ -80,3 +80,33 @@
     opacity: 0.5;
   }
 }
+
+.slider-wrapper {
+  padding: 8px;
+  margin-bottom: 4px;
+  border-radius: 12px;
+
+  border: 2px solid transparent;
+  box-sizing: border-box;
+
+  &.highlighted-slider {
+    border-color: #94a3b8;
+    border-style: dashed;
+    background-color: rgba(241, 245, 249, 0.7);
+  }
+}
+
+.floating-info-badge {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 8px 12px;
+  display: flex;
+  gap: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  cursor: default;
+}
