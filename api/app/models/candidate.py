@@ -32,7 +32,7 @@ class Candidate(BaseModel):
     # Scoring Metrics
     rf_score: Optional[float] = None
     user_score: Optional[float] = None
-    risk_flag: bool = False
+    info_flag: bool = False
     shap_values: Optional[Dict[str, float]] = None
 
     # XAI Generative Outputs

@@ -69,7 +69,7 @@ async def process_queue():
                         if cand_id in active_candidates:
                             active_candidates[cand_id].rf_score = float(scores["rf_score"])
                             active_candidates[cand_id].user_score = float(scores["user_score"])
-                            active_candidates[cand_id].risk_flag = bool(scores["risk_flag"])
+                            active_candidates[cand_id].info_flag = bool(scores["info_flag"])
                             active_candidates[cand_id].shap_values = {k: float(v) for k, v in
                                                                       scores.get("shap_values", {}).items()}
 
@@ -116,7 +116,7 @@ async def process_queue():
                         active_candidates[candidate_id].rf_score = float(scores["rf_score"])
                         active_candidates[candidate_id].user_score = float(scores["user_score"])
 
-                        active_candidates[candidate_id].risk_flag = bool(scores["risk_flag"])
+                        active_candidates[candidate_id].info_flag = bool(scores["info_flag"])
 
                         if scores.get("shap_values"):
 
@@ -185,8 +185,8 @@ async def upload_job(file: UploadFile = File(...)):
         # Throw an HTTP 409 Conflict if it matches the currently active job
         raise HTTPException(status_code=409, detail="Job description already active.")
 
-    current_job_filename = file.filename # update active filename
-    current_job_weights.clear() # clear existing weights
+    current_job_filename = file.filename  # update active filename
+    current_job_weights.clear()  # clear existing weights
 
     job_id = str(uuid.uuid4())
     file_extension = os.path.splitext(file.filename)[1].lower()
@@ -223,7 +223,7 @@ async def upload_cvs(files: List[UploadFile] = File(...)):
             features=CandidateFeatures(),
             rf_score=0.0,
             user_score=0.0,
-            risk_flag=False,
+            info_flag=False,
             shap_values={},
             executive_summary="Processing AI narrative...",
             interview_questions=[]
@@ -337,6 +337,7 @@ async def get_llm_stats():
         "progress_str": getattr(llm_manager, 'loading_progress', ''),
         "local_status": getattr(llm_manager, 'local_status', 'unloaded')
     }
+
 
 @app.delete("/api/candidates/{candidate_id}")
 async def delete_candidate(candidate_id: str):

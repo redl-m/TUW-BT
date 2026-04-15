@@ -26,14 +26,20 @@ import { Subject, debounceTime, takeUntil } from 'rxjs';
       </div>
 
       <div class="sliders-container" [class.disabled-sliders]="disabled">
-        <app-visual-slider
-          *ngFor="let key of weightKeys"
-          [label]="getDisplayName(key)"
-          [description]="getFeatureDescription(key)"
-          [value]="store.jobWeights()[key]"
-          [impactPercentage]="getImpactPercentage(key)"
-          [disabled]="disabled"  (valueChange)="onSliderChange(key, $event)">
-        </app-visual-slider>
+        <div *ngFor="let key of weightKeys"
+             class="slider-wrapper transition-all duration-300 rounded-lg border-2 border-transparent"
+             [class.highlighted-slider]="isHighlighted(key)">
+
+          <app-visual-slider
+            [label]="getDisplayName(key)"
+            [description]="getFeatureDescription(key)"
+            [value]="store.jobWeights()[key]"
+            [impactPercentage]="getImpactPercentage(key)"
+            [disabled]="disabled"
+            (valueChange)="onSliderChange(key, $event)">
+          </app-visual-slider>
+
+        </div>
       </div>
 
       <div *ngIf="disabled" class="loading-text">
@@ -134,5 +140,9 @@ export class WeightingSidebarComponent implements OnInit, OnDestroy {
   onSliderChange(feature: string, newValue: number) {
     this.store.updateWeight(feature, newValue);
     this.sliderSubject.next();
+  }
+
+  isHighlighted(key: string): boolean {
+    return this.store.highlightedFeatures().includes(key);
   }
 }

@@ -1,6 +1,7 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';import { CommonModule } from '@angular/common';
+import {Component, inject, Input, OnChanges, SimpleChanges} from '@angular/core';import { CommonModule } from '@angular/common';
 import { CandidateDetailComponent } from '../../../candidate-detail/candidate-detail.component';
 import { Candidate } from '../../../../core/models/candidate.model';
+import {CandidateStore} from '../../../../core/state/candidate.store';
 
 @Component({
   selector: 'app-candidate-tile',
@@ -8,11 +9,47 @@ import { Candidate } from '../../../../core/models/candidate.model';
   imports: [CommonModule, CandidateDetailComponent],
   styleUrls: ['./candidate-tile.component.scss'],
   template: `
-    <div *ngIf="candidate.risk_flag" class="floating-risk-badge" [class.auto-expand]="isAutoExpanding">
-      <span class="risk-icon leading-none">⚠️</span>
-      <div class="risk-text-container">
-        <span class="risk-title">Potential Risk</span>
-        <span class="risk-subtitle">Score deviation high</span>
+    <div *ngIf="candidate.info_flag"
+         class="floating-info-badge group"
+         [class.auto-expand]="isAutoExpanding"
+         (mouseenter)="onHoverDeviation(true)"
+         (mouseleave)="onHoverDeviation(false)">
+
+      <div class="info-icon-container">
+        <div class="info-icon">i</div>
+      </div>
+
+      <div class="info-content-container">
+
+        <div class="info-header">
+          <div class="info-title-row">
+            <span class="info-title">Score Insight</span>
+            <span class="gap-badge">+{{ totalDeviation | percent:'1.0-1' }} Gap</span>
+          </div>
+          <span class="info-subtitle">Deviation from baseline</span>
+        </div>
+
+        <div class="feature-breakdown">
+          <div *ngFor="let feat of deviatingFeaturesWithColors" class="feature-row">
+
+            <div class="feature-labels">
+          <span class="feature-name" [title]="formatFeatureName(feat.key)">
+            {{ formatFeatureName(feat.key) }}
+          </span>
+              <span class="feature-value">
+            +{{ feat.value | percent:'1.1-1' }}
+          </span>
+            </div>
+
+            <div class="deviation-bar-track">
+              <div class="deviation-bar-fill"
+                   [style.background-color]="feat.bgColor"
+                   [style.width.%]="feat.percentageOfGap"></div>
+            </div>
+
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -59,7 +96,6 @@ import { Candidate } from '../../../../core/models/candidate.model';
             style="font-family: inherit;"
             (click)="toggleExpand()">
             {{ isExpanded ? 'Hide Details' : 'View Details' }}
-
             <span class="caret" [ngClass]="{'rotate-180': isExpanded}">▼</span>
           </button>
         </div>
@@ -83,6 +119,7 @@ export class CandidateTileComponent {
   @Input() rank: number = 1;
   @Input() autoExpand: boolean = false;
 
+  store = inject(CandidateStore);
   isExpanded: boolean = false;
   isAutoExpanding: boolean = false;
 
@@ -139,5 +176,77 @@ export class CandidateTileComponent {
 
   toggleExpand(): void {
     this.isExpanded = !this.isExpanded;
+  }
+
+  get topDeviatingFeatures() {
+    if (!this.candidate?.deviation_breakdown) return [];
+    return Object.entries(this.candidate.deviation_breakdown)
+      .map(([key, value]) => ({ key, value }))
+      .slice(0, 3); // Display top 3
+  }
+
+  /**
+   * Computes and returns the total deviation between the user's score and the reference score (rf_score).
+   * The result is a non-negative value, which is the difference between user_score and rf_score,
+   * or zero if the difference is negative.
+   *
+   * @return {number} The total deviation, calculated as the positive difference between user_score and rf_score.
+   */
+  get totalDeviation(): number {
+    const userScore = this.candidate.user_score || 0;
+    const rfScore = this.candidate.rf_score || 0;
+    return Math.max(0, userScore - rfScore);
+  }
+
+  /**
+   * Map the deviating features to color codes and calculate their exact % of the gap.
+   */
+  get deviatingFeaturesWithColors() {
+    if (!this.candidate?.deviation_breakdown) return [];
+
+    const bgColors = ['#2d1a61', '#752589', '#bf30b6'];
+
+    const features = Object.entries(this.candidate.deviation_breakdown)
+      .map(([key, value]) => ({ key, value }))
+      .slice(0, 3);
+
+    let accumulatedDeviation = 0;
+
+    const mappedFeatures = features.map((feat, index) => {
+      accumulatedDeviation += feat.value;
+      return {
+        ...feat,
+        bgColor: bgColors[index % bgColors.length],
+        percentageOfGap: this.totalDeviation > 0 ? (feat.value / this.totalDeviation) * 100 : 0
+      };
+    });
+
+    const remaining = this.totalDeviation - accumulatedDeviation;
+    if (remaining > 0.01 && mappedFeatures.length > 0) {
+      mappedFeatures.push({
+        key: 'Other adjustments',
+        value: remaining,
+        bgColor: '#e5e7eb',
+        percentageOfGap: (remaining / this.totalDeviation) * 100
+      });
+    }
+
+    return mappedFeatures;
+  }
+
+  formatFeatureName(key: string): string {
+    return key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  }
+
+  /**
+   * Handles the deviation highlights when a hovering event occurs.
+   */
+  onHoverDeviation(isHovering: boolean): void {
+    if (isHovering && this.topDeviatingFeatures.length > 0) {
+      const featureKeys = this.topDeviatingFeatures.map(f => f.key);
+      this.store.setHighlightedFeatures(featureKeys);
+    } else {
+      this.store.setHighlightedFeatures([]);
+    }
   }
 }

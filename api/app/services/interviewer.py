@@ -11,12 +11,13 @@ class InterviewerService:
     def _build_prompt(self, candidate: Candidate, user_weights: Dict[str, float]) -> list:
         # System instructions define the persona, constraints, and JSON requirement
         system_instruction = (
+            # TODO: better PE
             "You are an expert HR assistant. Generate an executive summary and actionable "
             "interview questions for the following candidate. Adapt your focus based on the "
             "recruiter's current priorities.\n\n"
             "Instructions:\n"
             "1. Write a concise executive summary.\n"
-            "2. Generate up to 3 follow-up questions. If the Risk Flag is ACTIVE, at least "
+            "2. Generate up to 3 follow-up questions. If the Info Flag is ACTIVE, at least "
             "one question MUST probe the discrepancy.\n"
             "3. Prioritize questioning around features that the recruiter marked as 'Critical' (high weight).\n"
             "4. STRICT RULE: Your output must be a valid JSON object with exactly two keys: "
@@ -31,8 +32,8 @@ class InterviewerService:
             f"{json.dumps(candidate.shap_values, indent=2)}\n\n"
             f"[DATA STREAM 3: Recruiter Priorities (Dynamic Slider States)]\n"
             f"{json.dumps(user_weights, indent=2)}\n\n"
-            f"[SYSTEM WARNING: Risk Flag]\n"
-            f"Status: {'ACTIVE - The objective AI score is significantly lower than the recruiter\'s subjective score.' if candidate.risk_flag else 'INACTIVE'}"
+            f"[SYSTEM WARNING: Info Flag]\n"
+            f"Status: {'ACTIVE - The objective AI score is significantly lower than the recruiter\'s subjective score.' if candidate.info_flag else 'INACTIVE'}"
         )
 
         return [
