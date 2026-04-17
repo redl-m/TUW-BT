@@ -26,7 +26,7 @@ import {CandidateStore} from '../../../../core/state/candidate.store';
             <span class="info-title">Score Insight</span>
             <span class="gap-badge">+{{ totalDeviation | percent:'1.0-1' }} Gap</span>
           </div>
-          <span class="info-subtitle">Deviation from baseline</span>
+          <span class="info-subtitle">Deviation from baseline score caused by:</span>
         </div>
 
         <div class="feature-breakdown">
