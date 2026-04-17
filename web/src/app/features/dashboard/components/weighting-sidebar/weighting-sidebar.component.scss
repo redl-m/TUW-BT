@@ -91,9 +91,9 @@
   box-sizing: border-box;
 
   &.highlighted-slider {
-    border-color: #94a3b8;
+    border-color: var(--warning-color);
     border-style: dashed;
-    background-color: rgba(241, 245, 249, 0.7);
+    background-color: var(--warning-color-light);
   }
 }
 
