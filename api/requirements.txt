@@ -13,3 +13,9 @@ torch>=2.2.0
 accelerate>=0.29.0
 bitsandbytes>=0.43.0
 openai
+# pyannote.audio==3.4.0
+pydub
+torchvision
+torchaudio
+huggingface_hub>=1.5.0
+speechbrain==0.5.16
