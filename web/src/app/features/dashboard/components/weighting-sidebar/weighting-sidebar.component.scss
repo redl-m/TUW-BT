@@ -1,16 +1,24 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
 .sidebar-card {
   background: white;
   border-radius: 12px;
-  padding: 2rem;
+  padding: clamp(1rem, 3vh, 2rem);
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar-header {
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: clamp(0.75rem, 2vh, 1.5rem);
+  flex-shrink: 0;
 
   .header-icon {
     background: var(--accent-color);
@@ -21,6 +29,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
   }
 
   .header-text {
@@ -39,22 +48,29 @@
 }
 
 .sliders-container {
-  transition: opacity 0.5s ease;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: clamp(0.15rem, 1.2vh, 1.25rem);
+  flex: 1;
+  justify-content: center;
+  transition: opacity 0.5s ease;
 }
 
 .sidebar-footer {
-  margin-top: 1.5rem;
-  padding-top: 1.5rem;
+  margin-top: clamp(0.5rem, 1.5vh, 1.5rem);
+  padding-top: clamp(0.5rem, 1.5vh, 1.5rem);
   border-top: 1px solid #f0f0f0;
+  flex-shrink: 0;
 
   p {
     margin: 0;
     font-size: 0.85rem;
     color: #7b849b;
     line-height: 1.6;
+  }
+
+  @media (max-height: 750px) {
+    display: none;
   }
 }
 
@@ -74,19 +90,13 @@
 }
 
 @keyframes gentlePulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .slider-wrapper {
-  padding: 8px;
-  margin-bottom: 4px;
+  padding: clamp(2px, 0.5vh, 8px);
   border-radius: 12px;
-
   border: 2px solid transparent;
   box-sizing: border-box;
 
