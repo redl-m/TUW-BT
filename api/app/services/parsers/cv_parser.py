@@ -88,7 +88,7 @@ class CVParserService:
         messages = self._build_prompt(cv_text)
 
         # Use central LLM manager
-        response_text = self.llm.generate(messages, max_tokens=1024, do_sample=False)
+        response_text = self.llm.generate(messages, max_tokens=4096, do_sample=False)
         return self._clean_and_validate(response_text)
 
     # Extracts the name before passing the rest to Pydantic

@@ -43,7 +43,7 @@ class JobParserService:
         messages = self._build_prompt(job_text)
 
         # Deterministic extraction
-        response_text = self.llm.generate(messages, max_tokens=512, do_sample=False)
+        response_text = self.llm.generate(messages, max_tokens=4096, do_sample=False)
 
         try:
             match = re.search(r'\{.*\}', response_text, re.DOTALL)

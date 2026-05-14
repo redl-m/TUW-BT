@@ -83,7 +83,7 @@ class InterviewerService:
         messages = self._build_prompt(candidate, user_weights)
 
         # Creative generation
-        response_text = self.llm.generate(messages, max_tokens=768, temperature=0.6, do_sample=True)
+        response_text = self.llm.generate(messages, max_tokens=4096, temperature=0.6, do_sample=True)
 
         try:
             match = re.search(r'\{.*\}', response_text, re.DOTALL)
