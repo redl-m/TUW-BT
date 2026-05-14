@@ -17,7 +17,7 @@ class LLMSettings(BaseModel):
     provider: str = "api"  # Default to API
     api_key: str = os.getenv("API_KEY", "")
     base_url: str = "https://aqueduct.ai.datalab.tuwien.ac.at/v1"
-    model_name: str = "qwen-coder-30b"
+    model_name: str = "qwen-3.6-35b"
     local_model_id: str = r"D:\huggingface\hub\models--meta-llama--Meta-Llama-3.1-8B-Instruct\snapshots\0e9e39f249a16976918f6564b8830bc894c89659"  # absolute path or hf ID
 
     if not api_key:
@@ -118,7 +118,9 @@ class LLMManager:
         """Central text generation routing."""
         if self.settings.provider == "api":
             client = OpenAI(api_key=self.settings.api_key, base_url=self.settings.base_url)
-            api_temp = temperature if do_sample else 0.0
+
+            # vLLM compatibility for greedy decoding
+            api_temp = temperature if do_sample else 0.1
 
             max_retries = 3
             for attempt in range(max_retries):
@@ -127,9 +129,21 @@ class LLMManager:
                         model=self.settings.model_name,
                         messages=messages,
                         temperature=api_temp,
-                        max_tokens=max_tokens
+                        max_tokens=max_tokens,
+                        extra_body={"chat_template_kwargs": {"enable_thinking": False}}
                     )
-                    return response.choices[0].message.content
+
+                    message = response.choices[0].message
+
+                    # JSON routing
+                    if message.tool_calls and len(message.tool_calls) > 0:
+                        return message.tool_calls[0].function.arguments
+
+                    # Standard text response
+                    if message.content is not None:
+                        return message.content
+                    print(f"❌ RAW AQUEDUCT RESPONSE: {response.choices[0]}")
+                    raise ValueError("API returned an empty response (both content and tool_calls are empty).")
 
                 except openai.BadRequestError as e:
                     # Check for a connection error from Aqueduct
@@ -158,7 +172,6 @@ class LLMManager:
                 return_dict=True
             ).to(self.local_model.device)
 
-            # Local models might throw an error if temperature is passed while do_sample is False
             generate_kwargs = {
                 "max_new_tokens": max_tokens,
                 "eos_token_id": self.terminators,
